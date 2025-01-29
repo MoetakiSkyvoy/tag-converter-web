@@ -60,13 +60,16 @@
         <textarea id="input" placeholder="请粘贴原始文本..."></textarea>
         <div style="text-align: center;">
             <button onclick="loadExample()">加载示例</button>
-            <button onclick="convert()">开始转换</button>
+            <!-- <button onclick="convert()">开始转换</button> -->
             <button onclick="copyOutput()">复制结果</button>
         </div>
         <div id="output"></div>
     </div>
 
     <script>
+        // 更新后的正则表达式，同时匹配纯数字和带单位的情况
+        const numberPattern = /^\d+\.?\d*([kM]?)$/i; // 同时匹配 369 / 3.69k / 3M
+
         function convert() {
             const input = document.getElementById('input').value;
             const lines = input.split('\n').map(line => line.trim());
@@ -77,11 +80,17 @@
                 if (lines[i] === '?') {
                     if (i + 1 < lines.length) {
                         const currentLine = lines[i + 1];
-                        const parts = currentLine.split(/\s+/);
+                        // 使用正则分割，保留括号内容
+                        const parts = currentLine.split(/\s+(?![^(]*\))/); // 忽略括号内的空格
                         if (parts.length > 0) {
                             const lastPart = parts[parts.length - 1];
-                            if (/^\d+\.?\d*[kM]$/i.test(lastPart)) {
-                                tags.push(parts.slice(0, -1).join(' '));
+                            // 增强匹配逻辑
+                            if (numberPattern.test(lastPart)) {
+                                const validTag = parts.slice(0, -1).join(' ');
+                                tags.push(validTag);
+                            } else {
+                                // 如果没有数字结尾，整行作为tag
+                                tags.push(currentLine);
                             }
                         }
                     }
@@ -91,8 +100,7 @@
                 }
             }
 
-            const output = tags.join(', ');
-            document.getElementById('output').textContent = output;
+            document.getElementById('output').textContent = tags.join(', ');
         }
 
         function copyOutput() {
