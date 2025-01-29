@@ -59,6 +59,7 @@
         <h1>Tag格式转换器</h1>
         <textarea id="input" placeholder="请粘贴原始文本..."></textarea>
         <div style="text-align: center;">
+            <button onclick="loadExample()">加载示例</button>
             <button onclick="convert()">开始转换</button>
             <button onclick="copyOutput()">复制结果</button>
         </div>
@@ -99,6 +100,22 @@
             navigator.clipboard.writeText(output.textContent)
                 .then(() => alert('已复制到剪贴板！'))
                 .catch(err => console.error('复制失败:', err));
+        }
+
+        // 自动转换（输入时实时处理）
+        document.getElementById('input').addEventListener('input', convert);
+
+        // 添加示例按钮
+        function loadExample() {
+            const example = `Character // 示例数据
+        ?
+        raiden shogun 15k
+        General
+        ?
+        1girl 6.1M
+        ?...`;
+            document.getElementById('input').value = example;
+            convert();
         }
     </script>
 </body>
