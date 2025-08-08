@@ -130,6 +130,17 @@
             background: #e5e5ea;
         }
         
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+        
+        button.secondary:disabled:hover {
+            background: #f2f2f7;
+        }
+        
         /* 输出区域样式 */
         .output-section {
             margin-top: 1.5rem;
@@ -428,7 +439,8 @@
             <button 
                 onclick="loadExample()" 
                 class="secondary tooltip" 
-                data-tooltip="加载Danbooru格式示例数据">
+                data-tooltip="循环加载不同格式的示例数据"
+                id="load-example-btn">
                 📝 加载示例
             </button>
             <button 
@@ -511,6 +523,7 @@
          * - 保护词组完整性，防止复合词组被错误分割
          * - 自定义过滤器支持正则表达式和词组过滤
          * - 实时转换，用户体验友好，设置持久化存储
+         * - 智能状态管理，包括空输入时的状态重置
          * 
          * 架构设计：
          * - TagConverter: 主控制器类，统筹整个转换流程
@@ -519,12 +532,14 @@
          * - ContentCleaner: 内容清理模块，标准化和去重处理
          * - FilterManager: 过滤器管理模块，自定义关键词过滤
          * - UIManager: 用户界面管理模块，统一UI交互逻辑
+         * - ExampleManager: 示例数据管理，防重复加载和点击冲突
          * 
          * 版本历史：
          * - v1.0: 基础Danbooru格式支持
          * - v2.0: 添加Gelbooru格式支持和统一算法
          * - v3.0: 完整架构重构和现代化UI
-         * - v4.0: 自定义过滤器系统（当前版本）
+         * - v4.0: 自定义过滤器系统
+         * - v4.1: 示例管理器和状态重置优化（当前版本）
          */
 
         // ====================================================================
@@ -758,9 +773,18 @@
             }
             
             /**
-             * 主转换方法
+             * 主转换方法 - 四阶段处理流程的核心入口
+             * 
+             * 处理流程：
+             * 1. 格式检测：识别输入文本的格式类型（Danbooru/Gelbooru/Standard）
+             * 2. 内容提取：根据格式类型提取原始tag内容
+             * 3. 内容清理：标准化处理、去重、移除权重等
+             * 4. 自定义过滤：应用用户设定的过滤规则
+             * 
              * @param {string} input - 输入的原始文本
              * @returns {string[]} - 处理后的tag数组
+             * 
+             * @throws {Error} 当转换过程中发生错误时抛出异常
              */
             convert(input) {
                 if (!input || typeof input !== 'string') {
@@ -1111,10 +1135,31 @@
         const tagConverter = new TagConverter();
         
         /**
-         * 主转换函数 - 供UI调用
+         * 主转换函数 - 供UI调用的入口函数
+         * 
+         * 功能说明：
+         * - 获取用户输入并调用转换器进行处理
+         * - 处理空输入状态，自动隐藏格式状态指示器
+         * - 更新输出区域显示转换结果
+         * - 提供实时转换体验
+         * 
+         * 状态管理：
+         * - 空输入时：隐藏格式状态，重置输出为默认提示
+         * - 有效输入时：显示检测结果，更新转换输出
          */
         function convert() {
             const input = document.getElementById('input').value.trim();
+            
+            // 检查输入是否为空，如果为空则隐藏格式状态
+            if (!input) {
+                const statusEl = document.getElementById('format-status');
+                if (statusEl) {
+                    statusEl.style.display = 'none';
+                }
+                tagConverter.uiManager.updateOutput([]);
+                return;
+            }
+            
             const tags = tagConverter.convert(input);
             tagConverter.uiManager.updateOutput(tags);
         }
@@ -1143,25 +1188,131 @@
         }
         
         /**
-         * 加载示例数据
+         * 示例加载管理器 - ExampleManager
+         * 
+         * 问题解决：
+         * 1. 重复点击问题：通过isLoading标志防止快速连续点击
+         * 2. 示例重复问题：使用循环顺序加载，防止随机出现重复
+         * 3. 用户体验问题：提供加载状态反馈和按钮禁用保护
+         * 
+         * 技术特点：
+         * - 循环索引管理：防止越界和重复
+         * - 异步加载机制：使用async/await提供流畅体验
+         * - 状态保护：通过时间锁防止并发操作
+         * - UI反馈：实时更新按钮状态和文本
+         */
+        const ExampleManager = {
+            examples: [
+                // Danbooru格式示例
+                {
+                    name: 'Danbooru',
+                    content: `General\n?\n1boy 1.4M\n?\n1girl 6.1M\n?\noriginal 2.8M`
+                },
+                // Gelbooru格式示例  
+                {
+                    name: 'Gelbooru',
+                    content: `Artist? nekotokage 169Character? shirayuki tomoe 939Tag? 1girl 8032615? long hair 5441398? smile 3596391`
+                },
+                // 标准格式示例
+                {
+                    name: 'Standard',
+                    content: `masterpiece, best quality, 1girl, long hair, blue eyes, school uniform`
+                }
+            ],
+            currentIndex: -1,
+            isLoading: false,
+            
+            /**
+             * 获取下一个示例（循环顺序，避免重复）
+             * 
+             * 算法说明：
+             * - 使用模运算实现循环递增索引
+             * - 从-1开始，首次调用时索引变为0
+             * - 每次调用都保证返回不同的示例
+             * - 循环完成后重新从第一个开始
+             * 
+             * @returns {Object} 包含name和content的示例对象
+             */
+            getNextExample() {
+                this.currentIndex = (this.currentIndex + 1) % this.examples.length;
+                return this.examples[this.currentIndex];
+            },
+            
+            /**
+             * 加载示例并防止重复点击
+             * 
+             * 执行流程：
+             * 1. 检查是否正在加载，防止并发访问
+             * 2. 设置加载状态和按钮禁用
+             * 3. 获取下一个示例数据并更新UI
+             * 4. 调用转换函数处理新数据
+             * 5. 恰复按钮状态和解除加载锁
+             * 
+             * 防护机制：
+             * - isLoading标志防止并发调用
+             * - 按钮禁用防止用户重复点击
+             * - try/finally确保状态清理
+             * - 延时解除防止意外快速点击
+             */
+            async loadExample() {
+                // 防重复点击
+                if (this.isLoading) {
+                    return;
+                }
+                
+                this.isLoading = true;
+                
+                try {
+                    const example = this.getNextExample();
+                    const inputElement = document.getElementById('input');
+                    const button = document.getElementById('load-example-btn');
+                    
+                    // 更新按钮状态
+                    if (button) {
+                        const originalText = button.textContent;
+                        button.textContent = `☑️ 已加载`;
+                        button.disabled = true;
+                        
+                        // 恢复按钮状态
+                        setTimeout(() => {
+                            button.textContent = originalText;
+                            button.disabled = false;
+                        }, 500);
+                    }
+                    
+                    // 加载示例内容
+                    inputElement.value = example.content;
+                    convert();
+                    
+                    // 显示加载的示例类型
+                    console.log(`已加载 ${example.name} 格式示例`);
+                    
+                } finally {
+                    // 500ms后允许下次点击
+                    setTimeout(() => {
+                        this.isLoading = false;
+                    }, 500);
+                }
+            }
+        };
+        
+        /**
+         * 加载示例数据（全局函数，供按钮调用）
          */
         function loadExample() {
-            const examples = [
-                // Danbooru格式示例
-                `General\n?\n1boy 1.4M\n?\n1girl 6.1M\n?\noriginal 2.8M`,
-                // Gelbooru格式示例  
-                `Artist? nekotokage 169Character? shirayuki tomoe 939Tag? 1girl 8032615? long hair 5441398? smile 3596391`,
-                // 标准格式示例
-                `masterpiece, best quality, 1girl, long hair, blue eyes, school uniform`
-            ];
-            
-            const randomExample = examples[Math.floor(Math.random() * examples.length)];
-            document.getElementById('input').value = randomExample;
-            convert();
+            ExampleManager.loadExample();
         }
         
         /**
-         * 清空所有内容
+         * 清空所有内容 - 重置应用状态
+         * 
+         * 清空操作：
+         * 1. 清空输入框内容
+         * 2. 重置输出区域为默认提示状态
+         * 3. 隐藏格式检测状态指示器
+         * 4. 清除所有样式类
+         * 
+         * 注意：不会清除过滤器设置，保持用户配置
          */
         function clearAll() {
             document.getElementById('input').value = '';
@@ -1176,6 +1327,14 @@
         
         /**
          * 切换过滤器启用状态
+         * 
+         * 操作流程：
+         * 1. 读取用户切换状态
+         * 2. 更新FilterManager设置
+         * 3. 自动保存到localStorage
+         * 4. 重新转换当前内容以应用新设置
+         * 
+         * 实时更新：确保切换后立即看到效果
          */
         function toggleFilter() {
             const enabled = document.getElementById('filter-enabled').checked;
@@ -1187,6 +1346,20 @@
         
         /**
          * 更新过滤关键词
+         * 
+         * 处理流程：
+         * 1. 获取用户输入的关键词字符串
+         * 2. 解析为关键词数组（逗号分割）
+         * 3. 更新FilterManager的关键词列表
+         * 4. 重新编译正则表达式模式
+         * 5. 保存设置到localStorage
+         * 6. 更新UI统计信息
+         * 7. 重新转换当前内容
+         * 
+         * 支持格式：
+         * - 逗号分割的普通关键词
+         * - 正则表达式模式
+         * - 包含空格的词组
          */
         function updateFilterKeywords() {
             const keywords = document.getElementById('filter-keywords').value;
@@ -1201,7 +1374,16 @@
         
         /**
          * 切换过滤器设置区域显示/隐藏
-         */
+         * 
+         * 功能说明：
+         * - 控制过滤器配置区域的展开/折叠状态
+         * - 提供紧凑的UI布局，默认折叠节省空间
+         * - 实时更新按钮文本反映当前状态
+         * 
+         * 交互逻辑：
+         * - 折叠状态：显示“展开设置”
+         * - 展开状态：显示“收起设置”
+         *
         function toggleFilterSection() {
             const content = document.getElementById('filter-content');
             const button = document.getElementById('filter-expand');
