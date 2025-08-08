@@ -315,6 +315,20 @@
             display: none;
         }
         
+        /* 禁用状态样式 */
+        .filter-toggle.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        
+        .filter-toggle.disabled .toggle-slider {
+            background-color: #e0e0e0;
+        }
+        
+        .filter-toggle.disabled input:checked + .toggle-slider {
+            background-color: #e0e0e0;
+        }
+        
         .expand-button {
             background: none;
             border: none;
@@ -482,9 +496,10 @@
                         onchange="updateFilterKeywords()">
                     <div class="filter-help">
                         示例: "watermark, nsfw, bad quality, beautiful girl, \d+px" <br>
-                        • 支持正则表达式匹配 <br>
+                        • 所有关键词都被视为正则表达式，默认完全匹配 <br>
                         • 逗号分隔多个过滤词 <br>
-                        • 支持含空格的词组过滤 <br>
+                        • 普通字符串自动进行完全匹配（如"censored"不会匹配"uncensored"） <br>
+                        • 高级用户可使用^$或\b等边界符精确控制匹配规则 <br>
                         • 过滤在格式化完成后应用
                     </div>
                 </div>
@@ -495,7 +510,7 @@
                         <label style="font-weight: 600; color: #1d1d1f; font-size: 14px;">
                             🔄 提示词简化
                         </label>
-                        <label class="filter-toggle">
+                        <label class="filter-toggle" id="simplify-toggle">
                             <input type="checkbox" id="simplify-enabled" onchange="toggleSimplify()">
                             <span class="toggle-slider"></span>
                         </label>
@@ -687,33 +702,46 @@
              * 处理逻辑：
              * 1. 清空现有模式数组
              * 2. 遍历所有关键词
-             * 3. 尝试编译为正则表达式
-             * 4. 编译失败则转为普通字符串匹配（支持词边界）
+             * 3. 所有关键词都被视为正则表达式，并确保完全匹配
+             * 4. 如果是普通字符串，则自动转义并添加词边界
              * 
              * 特殊处理：
              * - 空关键词自动跳过
              * - 大小写不敏感匹配（'i'标志）
-             * - 普通字符串使用词边界匹配（\b）
-             * - 特殊字符自动转义
+             * - 所有模式都确保完全匹配（使用^$或词边界）
+             * - 特殊字符自动转义（对普通字符串）
              */
             compilePatterns() {
                 this.patterns = [];
                 this.keywords.forEach(keyword => {
                     if (!keyword.trim()) return;
                     
+                    const trimmedKeyword = keyword.trim();
+                    
                     try {
-                        // 尝试作为正则表达式编译
-                        // 使用'i'标志实现大小写不敏感匹配
-                        const pattern = new RegExp(keyword.trim(), 'i');
+                        // 检查是否已经包含完全匹配的边界标记
+                        const hasStartAnchor = trimmedKeyword.startsWith('^');
+                        const hasEndAnchor = trimmedKeyword.endsWith('$');
+                        const hasWordBoundary = trimmedKeyword.includes('\\b');
+                        
+                        let finalPattern = trimmedKeyword;
+                        
+                        // 如果没有任何边界限制，则添加词边界以确保完全匹配
+                        if (!hasStartAnchor && !hasEndAnchor && !hasWordBoundary) {
+                            finalPattern = `^${trimmedKeyword}$`;
+                        }
+                        
+                        // 尝试编译为正则表达式
+                        const pattern = new RegExp(finalPattern, 'i');
                         this.patterns.push(pattern);
                     } catch (error) {
                         // 正则表达式编译失败，当作普通字符串处理
                         // 转义所有正则特殊字符，避免意外匹配
-                        const escapedKeyword = keyword.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const escapedKeyword = trimmedKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                         
-                        // 使用词边界\b确保精确匹配，避免误匹配子字符串
-                        // 例如：过滤"girl"不会误匹配"girls"
-                        this.patterns.push(new RegExp(`\\b${escapedKeyword}\\b`, 'i'));
+                        // 使用^$确保完全匹配，避免误匹配子字符串
+                        // 例如：过滤"censored"不会误匹配"uncensored"
+                        this.patterns.push(new RegExp(`^${escapedKeyword}$`, 'i'));
                     }
                 });
             }
@@ -783,8 +811,8 @@
                     currentTags = filtered;
                 }
                 
-                // 第二阶段：提示词简化（优先级低）
-                if (this.simplifyEnabled) {
+                // 第二阶段：提示词简化（优先级低，依赖主开关）
+                if (this.enabled && this.simplifyEnabled) {
                     const simplified = this.simplifyTags(currentTags);
                     this.lastSimplifiedCount = currentTags.length - simplified.length;
                     currentTags = simplified;
@@ -797,42 +825,43 @@
              * 提示词简化算法 - 移除被其他提示词完全包含的冗余词汇
              * 
              * @param {string[]} tags - 输入的tag列表
-             * @returns {string[]} - 简化后的tag列表
+             * @returns {string[]} - 简化后的tag列表，按首字母排序
              * 
              * 算法原理：
              * 1. 对每个tag，检查是否被其他更长的tag完全包含
-             * 2. 如果tag A完全包含在tag B中（作为独立词汇），则移除tag A
-             * 3. 使用词边界匹配确保精确匹配，避免误删
+             * 2. 如果tag A完全包含在tag B中（作为独立词汇或完整子串），则移除tag A
+             * 3. 使用多种包含检测方式确保准确匹配
+             * 4. 返回结果按首字母排序
              * 
              * 示例：
              * - 输入：["hat", "red hat", "blue eyes"]
-             * - 输出：["red hat", "blue eyes"]  (移除"hat"因为被"red hat"包含)
+             * - 输出：["blue eyes", "red hat"]  (移除"hat"，按首字母排序)
+             * - 输入：["unzen (azur lane)", "unzen (sojourn through clear seas) (azur lane)"]
+             * - 输出：["unzen (sojourn through clear seas) (azur lane)"]
              * 
              * 性能优化：
              * - 按长度排序，优先检查较短的词汇
-             * - 使用正则表达式词边界确保精确匹配
+             * - 使用多种匹配方式确保包含检测的准确性
              * - 一旦发现包含关系立即跳过该词汇
              */
             simplifyTags(tags) {
                 if (!tags || tags.length <= 1) return tags;
                 
-                // 按长度排序，短的在前面（更可能被包含）
-                const sortedTags = tags.slice().sort((a, b) => a.length - b.length);
+                // 创建带索引的标签数组，用于保持原始顺序
+                const indexedTags = tags.map((tag, index) => ({ tag, originalIndex: index }));
                 const result = [];
                 
-                for (let i = 0; i < sortedTags.length; i++) {
-                    const currentTag = sortedTags[i];
+                for (let i = 0; i < indexedTags.length; i++) {
+                    const currentItem = indexedTags[i];
                     let isContained = false;
                     
                     // 检查当前tag是否被其他tag包含
-                    for (let j = i + 1; j < sortedTags.length; j++) {
-                        const longerTag = sortedTags[j];
+                    for (let j = 0; j < indexedTags.length; j++) {
+                        if (i === j) continue; // 跳过自己
                         
-                        // 使用词边界正则确保精确匹配
-                        // 例如：确保"hat"只匹配"red hat"中的完整词汇，而不匹配"hats"
-                        const pattern = new RegExp(`\\b${this.escapeRegex(currentTag)}\\b`, 'i');
+                        const otherItem = indexedTags[j];
                         
-                        if (pattern.test(longerTag)) {
+                        if (this.isTagContainedIn(currentItem.tag, otherItem.tag)) {
                             isContained = true;
                             break;
                         }
@@ -840,11 +869,169 @@
                     
                     // 如果没有被包含，则保留该tag
                     if (!isContained) {
-                        result.push(currentTag);
+                        result.push(currentItem);
                     }
                 }
                 
-                return result;
+                // 按原始输入顺序排序返回结果
+                return result
+                    .sort((a, b) => a.originalIndex - b.originalIndex)
+                    .map(item => item.tag);
+            }
+            
+            /**
+             * 检查短tag是否被长tag包含
+             * 专门针对提示词的语义包含关系检测
+             * 
+             * @param {string} shortTag - 较短的tag
+             * @param {string} longTag - 较长的tag
+             * @returns {boolean} - 是否包含
+             */
+            isTagContainedIn(shortTag, longTag) {
+                // 如果完全相同，不视为包含关系
+                if (shortTag.toLowerCase() === longTag.toLowerCase()) {
+                    return false;
+                }
+                
+                // 如果短tag不短于长tag，不可能包含
+                if (shortTag.length >= longTag.length) {
+                    return false;
+                }
+                
+                const shortTrimmed = shortTag.trim();
+                const longTrimmed = longTag.trim();
+                const shortLower = shortTrimmed.toLowerCase();
+                const longLower = longTrimmed.toLowerCase();
+                
+                // 方法1：简单词汇的词边界匹配
+                // 例如："hat" 包含在 "red hat" 中，但 "censored" 不包含在 "uncensored" 中
+                if (this.isSimpleWordContained(shortTrimmed, longTrimmed)) {
+                    return true;
+                }
+                
+                // 方法2：复杂词组的语义包含检测
+                // 例如："unzen (azur lane)" 语义上包含在 "unzen (sojourn through clear seas) (azur lane)" 中
+                if (this.isComplexPhraseContained(shortTrimmed, longTrimmed)) {
+                    return true;
+                }
+                
+                return false;
+            }
+            
+            /**
+             * 检查简单词汇的词边界包含
+             * @param {string} shortTag - 短标签
+             * @param {string} longTag - 长标签  
+             * @returns {boolean} - 是否包含
+             */
+            isSimpleWordContained(shortTag, longTag) {
+                try {
+                    // 使用严格的词边界匹配
+                    const pattern = new RegExp(`\\b${this.escapeRegex(shortTag)}\\b`, 'i');
+                    const result = pattern.test(longTag);
+                    
+                    // 额外检查：确保不是部分匹配
+                    // 例如 "censored" 不应该匹配 "uncensored"
+                    if (result) {
+                        const shortLower = shortTag.toLowerCase();
+                        const longLower = longTag.toLowerCase();
+                        
+                        // 如果长标签只是在短标签前后加了字符，则不认为是包含
+                        if (longLower.startsWith(shortLower) || longLower.endsWith(shortLower)) {
+                            // 检查是否只是前缀或后缀
+                            if (longLower === shortLower) {
+                                return false; // 完全相同
+                            }
+                            
+                            // 如果是连续的字母数字组合（如censored/uncensored），则不认为包含
+                            const beforeMatch = longLower.indexOf(shortLower);
+                            if (beforeMatch >= 0) {
+                                const beforeChar = beforeMatch > 0 ? longLower[beforeMatch - 1] : '';
+                                const afterChar = beforeMatch + shortLower.length < longLower.length ? 
+                                                longLower[beforeMatch + shortLower.length] : '';
+                                
+                                // 如果前后都是字母数字，则认为是一个连续单词的一部分
+                                if (/[a-z0-9]/.test(beforeChar) || /[a-z0-9]/.test(afterChar)) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                    
+                    return result;
+                } catch (error) {
+                    return false;
+                }
+            }
+            
+            /**
+             * 检查复杂词组的语义包含
+             * @param {string} shortTag - 短标签
+             * @param {string} longTag - 长标签
+             * @returns {boolean} - 是否包含
+             */
+            isComplexPhraseContained(shortTag, longTag) {
+                const shortLower = shortTag.toLowerCase();
+                const longLower = longTag.toLowerCase();
+                
+                // 对于复杂词组，我们需要分析语义结构
+                // 例如："unzen (azur lane)" 和 "unzen (sojourn through clear seas) (azur lane)"
+                
+                // 检查是否有共同的主要部分和修饰部分
+                // 分解标签结构：提取主要词汇和括号内容
+                const shortParts = this.parseTagStructure(shortTag);
+                const longParts = this.parseTagStructure(longTag);
+                
+                // 如果短标签的所有重要部分都出现在长标签中，则认为包含
+                if (shortParts.mainWord && longParts.mainWord) {
+                    // 主词必须完全匹配
+                    if (shortParts.mainWord.toLowerCase() !== longParts.mainWord.toLowerCase()) {
+                        return false;
+                    }
+                    
+                    // 检查括号内容的包含关系
+                    for (const shortBracket of shortParts.bracketContents) {
+                        let found = false;
+                        for (const longBracket of longParts.bracketContents) {
+                            if (longBracket.toLowerCase().includes(shortBracket.toLowerCase())) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) {
+                            return false;
+                        }
+                    }
+                    
+                    return true;
+                }
+                
+                return false;
+            }
+            
+            /**
+             * 解析标签结构，提取主要词汇和括号内容
+             * @param {string} tag - 标签
+             * @returns {Object} - 包含mainWord和bracketContents的对象
+             */
+            parseTagStructure(tag) {
+                const bracketContents = [];
+                let cleanTag = tag;
+                
+                // 提取所有括号内容
+                const bracketMatches = tag.matchAll(/\(([^)]+)\)/g);
+                for (const match of bracketMatches) {
+                    bracketContents.push(match[1].trim());
+                    cleanTag = cleanTag.replace(match[0], '').trim();
+                }
+                
+                // 剩余的就是主要词汇
+                const mainWord = cleanTag.trim();
+                
+                return {
+                    mainWord,
+                    bracketContents
+                };
             }
             
             /**
@@ -1141,6 +1328,7 @@
                     filterContent: document.getElementById('filter-content'),
                     // 提示词简化功能的UI元素
                     simplifyEnabled: document.getElementById('simplify-enabled'),
+                    simplifyToggle: document.getElementById('simplify-toggle'),
                     simplifiedCount: document.getElementById('simplified-count')
                 };
             }
@@ -1228,6 +1416,20 @@
             }
             
             /**
+             * 更新简化开关的启用/禁用状态
+             * @param {boolean} mainFilterEnabled - 主过滤器是否启用
+             */
+            updateSimplifyToggleState(mainFilterEnabled) {
+                if (this.elements.simplifyToggle) {
+                    if (mainFilterEnabled) {
+                        this.elements.simplifyToggle.classList.remove('disabled');
+                    } else {
+                        this.elements.simplifyToggle.classList.add('disabled');
+                    }
+                }
+            }
+            
+            /**
              * 初始化过滤器UI
              * @param {FilterManager} filterManager - 过滤器管理器实例
              */
@@ -1246,6 +1448,9 @@
                 if (this.elements.simplifyEnabled) {
                     this.elements.simplifyEnabled.checked = status.simplifyEnabled;
                 }
+                
+                // 初始化简化开关的启用状态
+                this.updateSimplifyToggleState(status.enabled);
                 
                 this.updateFilterStatus(status);
             }
@@ -1464,6 +1669,9 @@
             const enabled = document.getElementById('filter-enabled').checked;
             tagConverter.filterManager.setEnabled(enabled);
             
+            // 更新简化开关的启用状态
+            tagConverter.uiManager.updateSimplifyToggleState(enabled);
+            
             // 重新转换当前内容
             convert();
         }
@@ -1483,6 +1691,13 @@
          * - 实时更新：确保切换后立即看到效果
          */
         function toggleSimplify() {
+            // 检查主过滤器是否启用，如果未启用则不允许切换
+            if (!tagConverter.filterManager.enabled) {
+                // 强制保持关闭状态
+                document.getElementById('simplify-enabled').checked = false;
+                return;
+            }
+            
             const enabled = document.getElementById('simplify-enabled').checked;
             tagConverter.filterManager.setSimplifyEnabled(enabled);
             
