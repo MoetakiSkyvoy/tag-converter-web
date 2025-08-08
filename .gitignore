@@ -7,3 +7,4 @@ Thumbs.db
 .vscode/
 __pycache__/
 *.log
+CLAUDE.md

@@ -61,7 +61,7 @@
         <div style="text-align: center;">
             <button onclick="loadExample()">加载示例</button>
             <!-- <button onclick="convert()">开始转换</button> -->
-            <button onclick="copyOutput()">复制结果</button>
+            <button onclick="copyOutput(this)">复制结果</button>
         </div>
         <div id="output"></div>
     </div>
@@ -103,10 +103,18 @@
             document.getElementById('output').textContent = tags.join(', ');
         }
 
-        function copyOutput() {
+        function copyOutput(button) {
             const output = document.getElementById('output');
             navigator.clipboard.writeText(output.textContent)
-                .then(() => alert('已复制到剪贴板！'))
+                .then(() => {
+                    const originalText = button.textContent;
+                    button.textContent = '已复制';
+                    button.style.background = '#34C759';
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                        button.style.background = '#007AFF';
+                    }, 1500);
+                })
                 .catch(err => console.error('复制失败:', err));
         }
 
