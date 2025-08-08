@@ -184,6 +184,143 @@
         }
         
         /* =================================
+           自定义过滤器样式
+           ================================= */
+        
+        .filter-section {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .filter-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        
+        .filter-title {
+            font-weight: 600;
+            color: #1d1d1f;
+            font-size: 1.1rem;
+        }
+        
+        .filter-toggle {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
+        }
+        
+        .filter-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.3s;
+            border-radius: 30px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #007AFF;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(30px);
+        }
+        
+        .filter-input-group {
+            margin-bottom: 1rem;
+        }
+        
+        .filter-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e5e7;
+            border-radius: 8px;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+            font-size: 14px;
+            transition: border-color 0.2s ease;
+            box-sizing: border-box;
+        }
+        
+        .filter-input:focus {
+            outline: none;
+            border-color: #007AFF;
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+        }
+        
+        .filter-help {
+            font-size: 12px;
+            color: #666;
+            margin-top: 0.5rem;
+            line-height: 1.4;
+        }
+        
+        .filter-stats {
+            display: flex;
+            gap: 1rem;
+            font-size: 12px;
+            color: #666;
+            margin-top: 1rem;
+        }
+        
+        .filter-stat {
+            background: #fff;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .filter-collapsed {
+            display: none;
+        }
+        
+        .filter-section.collapsed .filter-collapsed {
+            display: none;
+        }
+        
+        .expand-button {
+            background: none;
+            border: none;
+            color: #007AFF;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 4px 8px;
+            min-width: auto;
+        }
+        
+        .expand-button:hover {
+            background: rgba(0, 122, 255, 0.1);
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* =================================
            响应式设计
            ================================= */
         
@@ -308,6 +445,49 @@
             </button>
         </section>
         
+        <!-- 自定义过滤器区域 -->
+        <section class="filter-section" id="filter-section">
+            <div class="filter-header">
+                <div class="filter-title">🎯 自定义过滤器</div>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <button class="expand-button" id="filter-expand" onclick="toggleFilterSection()">
+                        展开设置
+                    </button>
+                    <label class="filter-toggle">
+                        <input type="checkbox" id="filter-enabled" onchange="toggleFilter()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="filter-collapsed" id="filter-content">
+                <div class="filter-input-group">
+                    <input 
+                        type="text" 
+                        class="filter-input" 
+                        id="filter-keywords" 
+                        placeholder="输入要过滤的关键词，用逗号分隔（支持正则表达式）"
+                        onchange="updateFilterKeywords()">
+                    <div class="filter-help">
+                        示例: "watermark, nsfw, bad quality, beautiful girl, \d+px" <br>
+                        • 支持正则表达式匹配 <br>
+                        • 逗号分隔多个过滤词 <br>
+                        • 支持含空格的词组过滤 <br>
+                        • 过滤在格式化完成后应用
+                    </div>
+                </div>
+                
+                <div class="filter-stats">
+                    <div class="filter-stat">
+                        过滤规则: <span id="filter-count">0</span>个
+                    </div>
+                    <div class="filter-stat">
+                        上次过滤: <span id="filtered-count">0</span>个标签
+                    </div>
+                </div>
+            </div>
+        </section>
+        
         <!-- 输出区域 -->
         <section class="output-section">
             <label for="output" class="output-label">转换结果</label>
@@ -322,21 +502,29 @@
     <script>
         /**
          * ====================================================================
-         * Tag格式转换器 - 统一处理算法
+         * Tag格式转换器 - 统一处理算法 + 自定义过滤系统
          * ====================================================================
          * 
          * 功能概述：
          * - 支持Danbooru、Gelbooru、Standard三种格式的智能识别和转换
-         * - 采用三阶段处理流程：格式检测 → 内容提取 → 统一清理
+         * - 采用四阶段处理流程：格式检测 → 内容提取 → 统一清理 → 自定义过滤
          * - 保护词组完整性，防止复合词组被错误分割
-         * - 实时转换，用户体验友好
+         * - 自定义过滤器支持正则表达式和词组过滤
+         * - 实时转换，用户体验友好，设置持久化存储
          * 
          * 架构设计：
-         * - TagConverter: 主控制器类
-         * - FormatDetector: 格式检测模块
-         * - ContentExtractor: 内容提取模块  
-         * - ContentCleaner: 内容清理模块
-         * - UIManager: 用户界面管理模块
+         * - TagConverter: 主控制器类，统筹整个转换流程
+         * - FormatDetector: 格式检测模块，智能识别输入格式
+         * - ContentExtractor: 内容提取模块，按格式提取有效内容
+         * - ContentCleaner: 内容清理模块，标准化和去重处理
+         * - FilterManager: 过滤器管理模块，自定义关键词过滤
+         * - UIManager: 用户界面管理模块，统一UI交互逻辑
+         * 
+         * 版本历史：
+         * - v1.0: 基础Danbooru格式支持
+         * - v2.0: 添加Gelbooru格式支持和统一算法
+         * - v3.0: 完整架构重构和现代化UI
+         * - v4.0: 自定义过滤器系统（当前版本）
          */
 
         // ====================================================================
@@ -368,8 +556,193 @@
                 COPY_SUCCESS_DURATION: 1500,
                 COPY_SUCCESS_COLOR: '#34C759',
                 DEFAULT_BUTTON_COLOR: '#007AFF'
+            },
+            
+            // 过滤器相关配置
+            FILTER: {
+                STORAGE_KEY: 'tagConverter_filterSettings',
+                DEFAULT_ENABLED: false,
+                DEFAULT_KEYWORDS: []
             }
         };
+
+        // ====================================================================
+        // 过滤器管理模块
+        // ====================================================================
+        
+        /**
+         * FilterManager - 自定义过滤器管理类
+         * 
+         * 功能说明：
+         * - 管理用户自定义的过滤关键词列表
+         * - 支持正则表达式和普通字符串匹配
+         * - 提供过滤器启用/禁用控制
+         * - 持久化存储用户设置到localStorage
+         * - 实时统计过滤效果
+         * 
+         * 使用场景：
+         * - 过滤不需要的tag（如watermark、nsfw等）
+         * - 使用正则表达式过滤特定模式（如\d+px）
+         * - 过滤包含空格的词组（如bad quality、beautiful girl）
+         * 
+         * 技术特点：
+         * - 智能正则编译：自动检测并编译正则表达式
+         * - 错误容错：无效正则自动转为普通字符串匹配
+         * - 性能优化：预编译模式，避免重复解析
+         * - 数据持久化：localStorage存储，刷新保持设置
+         */
+        class FilterManager {
+            constructor() {
+                this.enabled = CONFIG.FILTER.DEFAULT_ENABLED;
+                this.keywords = [...CONFIG.FILTER.DEFAULT_KEYWORDS];
+                this.patterns = [];
+                this.lastFilteredCount = 0;
+                
+                this.loadSettings();
+                this.compilePatterns();
+            }
+            
+            /**
+             * 加载过滤器设置
+             */
+            loadSettings() {
+                try {
+                    const saved = localStorage.getItem(CONFIG.FILTER.STORAGE_KEY);
+                    if (saved) {
+                        const settings = JSON.parse(saved);
+                        this.enabled = settings.enabled ?? CONFIG.FILTER.DEFAULT_ENABLED;
+                        this.keywords = settings.keywords ?? [...CONFIG.FILTER.DEFAULT_KEYWORDS];
+                        this.compilePatterns();
+                    }
+                } catch (error) {
+                    console.warn('无法加载过滤器设置:', error);
+                }
+            }
+            
+            /**
+             * 保存过滤器设置
+             */
+            saveSettings() {
+                try {
+                    const settings = {
+                        enabled: this.enabled,
+                        keywords: this.keywords
+                    };
+                    localStorage.setItem(CONFIG.FILTER.STORAGE_KEY, JSON.stringify(settings));
+                } catch (error) {
+                    console.warn('无法保存过滤器设置:', error);
+                }
+            }
+            
+            /**
+             * 编译正则表达式模式
+             * 
+             * 处理逻辑：
+             * 1. 清空现有模式数组
+             * 2. 遍历所有关键词
+             * 3. 尝试编译为正则表达式
+             * 4. 编译失败则转为普通字符串匹配（支持词边界）
+             * 
+             * 特殊处理：
+             * - 空关键词自动跳过
+             * - 大小写不敏感匹配（'i'标志）
+             * - 普通字符串使用词边界匹配（\b）
+             * - 特殊字符自动转义
+             */
+            compilePatterns() {
+                this.patterns = [];
+                this.keywords.forEach(keyword => {
+                    if (!keyword.trim()) return;
+                    
+                    try {
+                        // 尝试作为正则表达式编译
+                        // 使用'i'标志实现大小写不敏感匹配
+                        const pattern = new RegExp(keyword.trim(), 'i');
+                        this.patterns.push(pattern);
+                    } catch (error) {
+                        // 正则表达式编译失败，当作普通字符串处理
+                        // 转义所有正则特殊字符，避免意外匹配
+                        const escapedKeyword = keyword.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        
+                        // 使用词边界\b确保精确匹配，避免误匹配子字符串
+                        // 例如：过滤"girl"不会误匹配"girls"
+                        this.patterns.push(new RegExp(`\\b${escapedKeyword}\\b`, 'i'));
+                    }
+                });
+            }
+            
+            /**
+             * 设置启用状态
+             * @param {boolean} enabled - 是否启用
+             */
+            setEnabled(enabled) {
+                this.enabled = Boolean(enabled);
+                this.saveSettings();
+            }
+            
+            /**
+             * 设置过滤关键词
+             * @param {string} keywordString - 逗号分隔的关键词字符串
+             */
+            setKeywords(keywordString) {
+                this.keywords = keywordString
+                    .split(',')
+                    .map(k => k.trim())
+                    .filter(k => k.length > 0);
+                
+                this.compilePatterns();
+                this.saveSettings();
+            }
+            
+            /**
+             * 应用过滤器到tag列表
+             * 
+             * @param {string[]} tags - 原始tag列表
+             * @returns {string[]} - 过滤后的tag列表
+             * 
+             * 过滤逻辑：
+             * 1. 检查过滤器是否启用且有过滤规则
+             * 2. 遍历每个tag，测试是否匹配任一过滤规则
+             * 3. 保留不匹配任何过滤规则的tag
+             * 4. 统计被过滤的tag数量
+             * 
+             * 性能考虑：
+             * - 未启用时直接返回，避免不必要的处理
+             * - 使用Array.filter和some方法实现高效过滤
+             * - 一旦匹配到规则立即停止检查（短路逻辑）
+             */
+            applyFilter(tags) {
+                // 快速路径：过滤器未启用或无过滤规则
+                if (!this.enabled || this.patterns.length === 0) {
+                    this.lastFilteredCount = 0;
+                    return tags;
+                }
+                
+                // 应用过滤规则
+                const filtered = tags.filter(tag => {
+                    // 检查tag是否匹配任一过滤规则
+                    // 使用some方法实现短路逻辑，提高性能
+                    return !this.patterns.some(pattern => pattern.test(tag));
+                });
+                
+                // 统计被过滤掉的tag数量，用于UI显示
+                this.lastFilteredCount = tags.length - filtered.length;
+                return filtered;
+            }
+            
+            /**
+             * 获取过滤器状态信息
+             * @returns {Object} 状态信息
+             */
+            getStatus() {
+                return {
+                    enabled: this.enabled,
+                    keywordCount: this.keywords.length,
+                    lastFilteredCount: this.lastFilteredCount,
+                    keywords: this.keywords
+                };
+            }
+        }
 
         // ====================================================================
         // 核心处理类：Tag转换器
@@ -380,6 +753,7 @@
                 this.formatDetector = new FormatDetector();
                 this.contentExtractor = new ContentExtractor();
                 this.contentCleaner = new ContentCleaner();
+                this.filterManager = new FilterManager();
                 this.uiManager = new UIManager();
             }
             
@@ -394,15 +768,17 @@
                 }
                 
                 try {
-                    // 三阶段处理流程
+                    // 四阶段处理流程
                     const format = this.formatDetector.detect(input.trim());
                     const rawContent = this.contentExtractor.extract(input.trim(), format);
                     const cleanedTags = this.contentCleaner.clean(rawContent);
+                    const filteredTags = this.filterManager.applyFilter(cleanedTags);
                     
                     // 更新UI状态
-                    this.uiManager.updateFormatStatus(format, cleanedTags.length);
+                    this.uiManager.updateFormatStatus(format, filteredTags.length);
+                    this.uiManager.updateFilterStatus(this.filterManager.getStatus());
                     
-                    return cleanedTags;
+                    return filteredTags;
                 } catch (error) {
                     console.error('转换过程中发生错误:', error);
                     this.uiManager.showError('转换失败，请检查输入格式');
@@ -619,7 +995,13 @@
                 this.elements = {
                     input: document.getElementById('input'),
                     output: document.getElementById('output'),
-                    formatStatus: document.getElementById('format-status')
+                    formatStatus: document.getElementById('format-status'),
+                    filterEnabled: document.getElementById('filter-enabled'),
+                    filterKeywords: document.getElementById('filter-keywords'),
+                    filterCount: document.getElementById('filter-count'),
+                    filteredCount: document.getElementById('filtered-count'),
+                    filterExpand: document.getElementById('filter-expand'),
+                    filterContent: document.getElementById('filter-content')
                 };
             }
             
@@ -687,6 +1069,37 @@
                     button.textContent = originalText;
                     button.style.background = originalColor || CONFIG.UI.DEFAULT_BUTTON_COLOR;
                 }, CONFIG.UI.COPY_SUCCESS_DURATION);
+            }
+            
+            /**
+             * 更新过滤器状态显示
+             * @param {Object} status - 过滤器状态
+             */
+            updateFilterStatus(status) {
+                if (this.elements.filterCount) {
+                    this.elements.filterCount.textContent = status.keywordCount;
+                }
+                if (this.elements.filteredCount) {
+                    this.elements.filteredCount.textContent = status.lastFilteredCount;
+                }
+            }
+            
+            /**
+             * 初始化过滤器UI
+             * @param {FilterManager} filterManager - 过滤器管理器实例
+             */
+            initializeFilterUI(filterManager) {
+                const status = filterManager.getStatus();
+                
+                if (this.elements.filterEnabled) {
+                    this.elements.filterEnabled.checked = status.enabled;
+                }
+                
+                if (this.elements.filterKeywords) {
+                    this.elements.filterKeywords.value = status.keywords.join(', ');
+                }
+                
+                this.updateFilterStatus(status);
             }
         }
 
@@ -760,6 +1173,47 @@
                 statusEl.style.display = 'none';
             }
         }
+        
+        /**
+         * 切换过滤器启用状态
+         */
+        function toggleFilter() {
+            const enabled = document.getElementById('filter-enabled').checked;
+            tagConverter.filterManager.setEnabled(enabled);
+            
+            // 重新转换当前内容
+            convert();
+        }
+        
+        /**
+         * 更新过滤关键词
+         */
+        function updateFilterKeywords() {
+            const keywords = document.getElementById('filter-keywords').value;
+            tagConverter.filterManager.setKeywords(keywords);
+            
+            // 更新UI状态
+            tagConverter.uiManager.updateFilterStatus(tagConverter.filterManager.getStatus());
+            
+            // 重新转换当前内容
+            convert();
+        }
+        
+        /**
+         * 切换过滤器设置区域显示/隐藏
+         */
+        function toggleFilterSection() {
+            const content = document.getElementById('filter-content');
+            const button = document.getElementById('filter-expand');
+            
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = 'block';
+                button.textContent = '收起设置';
+            } else {
+                content.style.display = 'none';
+                button.textContent = '展开设置';
+            }
+        }
 
         // ====================================================================
         // 事件监听器和初始化
@@ -767,26 +1221,15 @@
         
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
+            // 初始化过滤器UI
+            tagConverter.uiManager.initializeFilterUI(tagConverter.filterManager);
+            
             // 实时转换监听
             document.getElementById('input').addEventListener('input', convert);
             
-            // 键盘快捷键支持
-            document.addEventListener('keydown', function(e) {
-                // Ctrl+Enter 或 Cmd+Enter 复制结果
-                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                    e.preventDefault();
-                    const copyBtn = document.querySelector('button[onclick*="copyOutput"]');
-                    if (copyBtn) copyOutput(copyBtn);
-                }
-                
-                // Ctrl+L 或 Cmd+L 加载示例
-                if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
-                    e.preventDefault();
-                    loadExample();
-                }
-            });
+            // 移除键盘快捷键以避免冲突
             
-            console.log('Tag格式转换器已初始化 - 支持Danbooru/Gelbooru/Standard格式');
+            console.log('Tag格式转换器已初始化 - 支持Danbooru/Gelbooru/Standard格式 + 自定义过滤');
         });
     </script>
 </body>
