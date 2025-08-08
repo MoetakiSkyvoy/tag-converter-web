@@ -451,6 +451,13 @@
         <!-- 操作按钮组 -->
         <section class="button-group">
             <button 
+                onclick="pasteAndCopy(this)" 
+                class="tooltip" 
+                data-tooltip="从剪贴板粘贴内容，转换后自动复制结果"
+                id="paste-copy-btn">
+                🔄 粘贴并复制
+            </button>
+            <button 
                 onclick="loadExample()" 
                 class="secondary tooltip" 
                 data-tooltip="循环加载不同格式的示例数据"
@@ -1494,6 +1501,222 @@
         }
         
         /**
+         * 剪贴板权限管理器
+         */
+        const ClipboardManager = {
+            // 权限状态缓存
+            permissionGranted: false,
+            permissionChecked: false,
+            
+            /**
+             * 检查剪贴板权限状态
+             * @returns {Promise<boolean>} 是否有权限
+             */
+            async checkPermission() {
+                try {
+                    // 如果已经检查过且有权限，直接返回
+                    if (this.permissionChecked && this.permissionGranted) {
+                        return true;
+                    }
+                    
+                    // 检查Permissions API支持
+                    if ('permissions' in navigator) {
+                        const permission = await navigator.permissions.query({ name: 'clipboard-read' });
+                        
+                        if (permission.state === 'granted') {
+                            this.permissionGranted = true;
+                            this.permissionChecked = true;
+                            return true;
+                        } else if (permission.state === 'denied') {
+                            this.permissionGranted = false;
+                            this.permissionChecked = true;
+                            return false;
+                        }
+                        // 如果是 'prompt' 状态，需要用户交互
+                    }
+                    
+                    return false;
+                } catch (error) {
+                    console.log('权限检查失败，将通过用户交互获取:', error);
+                    return false;
+                }
+            },
+            
+            /**
+             * 请求剪贴板权限（通过实际读取操作）
+             * @returns {Promise<boolean>} 是否获得权限
+             */
+            async requestPermission() {
+                try {
+                    // 尝试读取剪贴板来触发权限请求
+                    await navigator.clipboard.readText();
+                    this.permissionGranted = true;
+                    this.permissionChecked = true;
+                    return true;
+                } catch (error) {
+                    if (error.name === 'NotAllowedError') {
+                        this.permissionGranted = false;
+                        this.permissionChecked = true;
+                        return false;
+                    }
+                    // 其他错误（如空剪贴板）不影响权限状态
+                    this.permissionGranted = true;
+                    this.permissionChecked = true;
+                    return true;
+                }
+            },
+            
+            /**
+             * 安全地读取剪贴板内容
+             * @returns {Promise<string>} 剪贴板内容
+             */
+            async readClipboard() {
+                if (!navigator.clipboard || !navigator.clipboard.readText) {
+                    throw new Error('浏览器不支持剪贴板API');
+                }
+                
+                return await navigator.clipboard.readText();
+            },
+            
+            /**
+             * 重置权限状态（用于测试或权限变更时）
+             */
+            resetPermission() {
+                this.permissionGranted = false;
+                this.permissionChecked = false;
+            }
+        };
+        
+        /**
+         * 粘贴并复制功能 - 一键完成粘贴、处理、复制流程
+         * @param {HTMLElement} button - 触发的按钮元素
+         */
+        async function pasteAndCopy(button) {
+            try {
+                // 检查剪贴板API支持
+                if (!navigator.clipboard || !navigator.clipboard.readText) {
+                    alert('您的浏览器不支持剪贴板读取功能，请使用较新版本的浏览器');
+                    return;
+                }
+                
+                // 显示加载状态
+                const originalText = button.textContent;
+                const originalColor = button.style.background;
+                button.textContent = '⏳ 处理中...';
+                button.disabled = true;
+                
+                try {
+                    // 1. 检查权限状态
+                    let hasPermission = await ClipboardManager.checkPermission();
+                    
+                    // 2. 如果没有权限，尝试请求权限
+                    if (!hasPermission) {
+                        button.textContent = '🔐 请求权限...';
+                        hasPermission = await ClipboardManager.requestPermission();
+                        
+                        if (!hasPermission) {
+                            throw new Error('权限被拒绝');
+                        }
+                    }
+                    
+                    // 3. 从剪贴板读取内容
+                    button.textContent = '📋 读取剪贴板...';
+                    const clipboardText = await ClipboardManager.readClipboard();
+                    
+                    if (!clipboardText || !clipboardText.trim()) {
+                        throw new Error('剪贴板内容为空');
+                    }
+                    
+                    // 4. 将内容粘贴到输入框
+                    button.textContent = '📝 处理内容...';
+                    const inputElement = document.getElementById('input');
+                    inputElement.value = clipboardText;
+                    
+                    // 5. 自动转换内容
+                    convert();
+                    
+                    // 等待一小段时间确保转换完成
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // 6. 检查转换结果
+                    const output = document.getElementById('output');
+                    const result = output.textContent.trim();
+                    
+                    if (!result || result === '等待输入内容进行转换...') {
+                        throw new Error('转换结果为空');
+                    }
+                    
+                    // 7. 自动复制转换结果
+                    button.textContent = '📤 复制结果...';
+                    await navigator.clipboard.writeText(result);
+                    
+                    // 8. 显示成功反馈
+                    button.textContent = '✅ 完成';
+                    button.style.background = '#34C759';
+                    
+                    // 9. 短暂延迟后恢复按钮状态
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                        button.style.background = originalColor || '';
+                        button.disabled = false;
+                    }, 2000);
+                    
+                } catch (error) {
+                    // 错误处理
+                    console.error('粘贴并复制失败:', error);
+                    
+                    let errorMessage = '操作失败';
+                    if (error.message.includes('剪贴板内容为空')) {
+                        errorMessage = '剪贴板内容为空，请先复制一些文本';
+                    } else if (error.message.includes('转换结果为空')) {
+                        errorMessage = '输入内容无法转换，请检查格式是否正确';
+                    } else if (error.message.includes('权限被拒绝')) {
+                        errorMessage = '剪贴板访问被拒绝。如需使用此功能，请:\n1. 刷新页面重试\n2. 检查浏览器设置中的剪贴板权限\n3. 确保在安全的HTTPS环境中使用';
+                    } else if (error.name === 'NotAllowedError') {
+                        errorMessage = '需要授权访问剪贴板。请点击浏览器的允许按钮，授权后将记住您的选择';
+                        // 重置权限状态，下次可以重新请求
+                        ClipboardManager.resetPermission();
+                    } else {
+                        errorMessage = '操作失败: ' + error.message;
+                    }
+                    
+                    button.textContent = '❌ 失败';
+                    button.style.background = '#FF3B30';
+                    alert(errorMessage);
+                    
+                    // 恢复按钮状态
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                        button.style.background = originalColor || '';
+                        button.disabled = false;
+                    }, 3000);
+                }
+                
+            } catch (error) {
+                console.error('粘贴并复制功能初始化失败:', error);
+                alert('功能初始化失败，请刷新页面重试');
+            }
+        }
+        
+        /**
+         * 主动请求剪贴板权限（页面加载时调用）
+         */
+        async function initializeClipboardPermission() {
+            try {
+                // 检查当前权限状态
+                await ClipboardManager.checkPermission();
+                
+                if (ClipboardManager.permissionGranted) {
+                    console.log('✅ 剪贴板权限已获取');
+                } else {
+                    console.log('ℹ️ 剪贴板权限未获取，首次使用时将请求权限');
+                }
+            } catch (error) {
+                console.log('剪贴板权限初始化失败:', error);
+            }
+        }
+        
+        /**
          * 复制输出结果到剪贴板
          * @param {HTMLElement} button - 触发的按钮元素
          */
@@ -1769,6 +1992,9 @@
             
             // 实时转换监听
             document.getElementById('input').addEventListener('input', convert);
+            
+            // 初始化剪贴板权限
+            initializeClipboardPermission();
             
             // 移除键盘快捷键以避免冲突
             
