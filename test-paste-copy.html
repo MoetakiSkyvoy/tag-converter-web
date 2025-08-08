@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>粘贴并复制功能测试</title>
+</head>
+<body>
+    <h2>粘贴并复制功能测试</h2>
+    
+    <div style="margin: 20px; padding: 20px; border: 1px solid #ccc; border-radius: 8px;">
+        <h3>测试步骤：</h3>
+        <ol>
+            <li>复制以下测试内容之一到剪贴板</li>
+            <li>在主页面点击"🔄 粘贴并复制"按钮</li>
+            <li>检查是否自动粘贴、转换并复制了结果</li>
+        </ol>
+        
+        <h3>测试用例：</h3>
+        
+        <div style="margin: 15px 0; padding: 15px; background: #f5f5f5; border-radius: 5px;">
+            <h4>1. Danbooru格式测试</h4>
+            <textarea readonly style="width: 100%; height: 80px; font-family: monospace;">General
+?
+1boy 1.4M
+?
+1girl 6.1M
+?
+masterpiece 3.2M</textarea>
+            <button onclick="copyToClipboard(this.previousElementSibling.value)">📋 复制此内容</button>
+        </div>
+        
+        <div style="margin: 15px 0; padding: 15px; background: #f5f5f5; border-radius: 5px;">
+            <h4>2. Gelbooru格式测试</h4>
+            <textarea readonly style="width: 100%; height: 80px; font-family: monospace;">Artist? nekotokage 169Character? shirayuki tomoe 939Tag? 1girl 8032615? long hair 5441398? blue eyes 3596391</textarea>
+            <button onclick="copyToClipboard(this.previousElementSibling.value)">📋 复制此内容</button>
+        </div>
+        
+        <div style="margin: 15px 0; padding: 15px; background: #f5f5f5; border-radius: 5px;">
+            <h4>3. 标准格式测试</h4>
+            <textarea readonly style="width: 100%; height: 80px; font-family: monospace;">masterpiece, best quality, 1girl, long hair, blue eyes, school uniform, smile</textarea>
+            <button onclick="copyToClipboard(this.previousElementSibling.value)">📋 复制此内容</button>
+        </div>
+        
+        <div style="margin: 15px 0; padding: 15px; background: #ffe6e6; border-radius: 5px;">
+            <h4>4. 空内容测试（应该显示错误）</h4>
+            <textarea readonly style="width: 100%; height: 60px; font-family: monospace;"></textarea>
+            <button onclick="copyToClipboard(this.previousElementSibling.value)">📋 复制空内容</button>
+        </div>
+    </div>
+    
+    <div style="margin: 20px; padding: 20px; border: 1px solid #4CAF50; border-radius: 8px; background: #e8f5e9;">
+        <h3>功能说明：</h3>
+        <ul>
+            <li><strong>浏览器兼容性：</strong>需要Chrome 76+、Firefox 79+、Safari 13.1+等现代浏览器</li>
+            <li><strong>权限要求：</strong>首次使用时浏览器可能要求授权访问剪贴板</li>
+            <li><strong>操作流程：</strong>读取剪贴板 → 粘贴到输入框 → 自动转换 → 复制结果</li>
+            <li><strong>状态反馈：</strong>按钮会显示处理状态和结果</li>
+            <li><strong>错误处理：</strong>自动检测空内容、格式错误、权限问题等</li>
+        </ul>
+    </div>
+    
+    <div style="margin: 20px; padding: 20px; border: 1px solid #2196F3; border-radius: 8px; background: #e3f2fd;">
+        <h3>预期结果：</h3>
+        <ul>
+            <li>✅ Danbooru格式：应转换为 "1boy, 1girl, masterpiece"</li>
+            <li>✅ Gelbooru格式：应转换为 "nekotokage, shirayuki tomoe, 1girl, long hair, blue eyes"</li>
+            <li>✅ 标准格式：应保持原内容（可能会应用过滤器）</li>
+            <li>❌ 空内容：应显示"剪贴板内容为空"错误</li>
+        </ul>
+    </div>
+    
+    <script>
+        async function copyToClipboard(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                alert('内容已复制到剪贴板！现在可以在主页面测试"粘贴并复制"功能了。');
+            } catch (error) {
+                console.error('复制失败:', error);
+                alert('复制失败: ' + error.message);
+            }
+        }
+        
+        // 页面加载时检查剪贴板API支持
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!navigator.clipboard) {
+                document.body.innerHTML = `
+                    <div style="margin: 50px; text-align: center; color: #d32f2f;">
+                        <h2>⚠️ 浏览器不支持</h2>
+                        <p>您的浏览器不支持剪贴板API，无法使用"粘贴并复制"功能。</p>
+                        <p>请使用以下浏览器的最新版本：</p>
+                        <ul style="text-align: left; display: inline-block;">
+                            <li>Chrome 76+</li>
+                            <li>Firefox 79+</li>
+                            <li>Safari 13.1+</li>
+                            <li>Edge 79+</li>
+                        </ul>
+                    </div>
+                `;
+            } else {
+                console.log('✅ 剪贴板API支持正常');
+            }
+        });
+    </script>
+</body>
+</html>

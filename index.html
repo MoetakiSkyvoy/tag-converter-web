@@ -346,6 +346,188 @@
         }
         
         /* =================================
+           弹窗样式
+           ================================= */
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+        
+        .modal-content {
+            position: relative;
+            background-color: #ffffff;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: modalFadeIn 0.3s ease-out;
+        }
+        
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        
+        .modal-header {
+            padding: 2rem;
+            background: linear-gradient(135deg, #007AFF, #5856D6);
+            color: white;
+            border-radius: 16px 16px 0 0;
+            text-align: center;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+        
+        .modal-header p {
+            margin: 0.5rem 0 0 0;
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+        
+        .modal-body {
+            padding: 2rem;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .feature-card {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid #e9ecef;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+        
+        .feature-card h4 {
+            color: #1d1d1f;
+            font-size: 1rem;
+            margin: 0 0 1rem 0;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .feature-card p {
+            color: #666;
+            line-height: 1.6;
+            margin: 0.5rem 0;
+            font-size: 14px;
+        }
+        
+        .feature-card ul {
+            margin: 0;
+            padding-left: 1.2rem;
+            list-style-type: disc;
+        }
+        
+        .feature-card li {
+            color: #666;
+            line-height: 1.6;
+            margin: 0.3rem 0;
+            font-size: 14px;
+        }
+        
+        .close-modal {
+            position: absolute;
+            right: 1rem;
+            top: 1rem;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            text-align: right;
+            transition: opacity 0.2s ease;
+        }
+        
+        .close-modal:hover {
+            opacity: 0.7;
+        }
+        
+        .version-info {
+            background: #e3f2fd;
+            border: 1px solid #90caf9;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1.5rem;
+            text-align: center;
+        }
+        
+        .version-info h4 {
+            color: #1976d2;
+            margin: 0 0 0.5rem 0;
+            font-size: 1rem;
+        }
+        
+        .version-info p {
+            color: #1565c0;
+            margin: 0.25rem 0;
+            font-size: 14px;
+        }
+        
+        /* =================================
+           页脚样式
+           ================================= */
+        
+        .footer {
+            margin-top: 3rem;
+            padding: 1.5rem;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .footer-link {
+            color: #007AFF;
+            text-decoration: underline;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+        
+        .footer-link:hover {
+            color: #0056CC;
+            text-decoration: underline;
+        }
+        
+        /* =================================
            响应式设计
            ================================= */
         
@@ -377,6 +559,28 @@
             button {
                 width: 100%;
                 max-width: 200px;
+            }
+            
+            .modal-content {
+                width: 95%;
+                margin: 2% auto;
+            }
+            
+            .modal-header {
+                padding: 1.5rem;
+            }
+            
+            .modal-header h2 {
+                font-size: 1.5rem;
+            }
+            
+            .modal-body {
+                padding: 1.5rem;
+            }
+            
+            .feature-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
             }
         }
         
@@ -435,7 +639,6 @@
         <!-- 页面标题区域 -->
         <header>
             <h1>Tag格式转换器</h1>
-            <p class="subtitle">支持Danbooru、Gelbooru多格式智能转换、实时处理和一键复制</p>
         </header>
         
         <!-- 输入区域 -->
@@ -476,6 +679,16 @@
                 data-tooltip="复制转换结果到剪贴板">
                 📋 复制结果
             </button>
+        </section>
+        
+        <!-- 输出区域 -->
+        <section class="output-section">
+            <label for="output" class="output-label">转换结果</label>
+            <div 
+                id="output" 
+                aria-live="polite" 
+                aria-label="转换结果输出区域">等待输入内容进行转换...
+            </div>
         </section>
         
         <!-- 自定义过滤器区域 -->
@@ -544,15 +757,69 @@
             </div>
         </section>
         
-        <!-- 输出区域 -->
-        <section class="output-section">
-            <label for="output" class="output-label">转换结果</label>
-            <div 
-                id="output" 
-                aria-live="polite" 
-                aria-label="转换结果输出区域">等待输入内容进行转换...
+    </div>
+    
+    <!-- 简化页脚 -->
+    <footer class="footer">
+        💡 <span class="footer-link" onclick="showAboutModal()">关于</span>
+    </footer>
+    
+    <!-- 关于软件弹窗 -->
+    <div id="aboutModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="close-modal" onclick="hideAboutModal()">&times;</button>
+                <h2>🏷️ Tag格式转换器</h2>
+                <p>支持Danbooru、Gelbooru多格式智能转换</p>
             </div>
-        </section>
+            <div class="modal-body">
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>📊 核心功能</h4>
+                        <ul>
+                            <li>四阶段智能处理流程</li>
+                            <li>实时格式检测识别</li>
+                            <li>自动清理去重处理</li>
+                            <li>一键复制粘贴操作</li>
+                        </ul>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🎯 支持格式</h4>
+                        <ul>
+                            <li>Danbooru 标准格式</li>
+                            <li>Gelbooru 内容格式</li>
+                            <li>通用逗号分隔格式</li>
+                            <li>智能格式自动识别</li>
+                        </ul>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🔍 高级特性</h4>
+                        <ul>
+                            <li>自定义过滤器系统</li>
+                            <li>提示词智能简化</li>
+                            <li>正则表达式支持</li>
+                            <li>设置持久保存</li>
+                        </ul>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🔧 技术特性</h4>
+                        <ul>
+                            <li>纯前端应用架构</li>
+                            <li>无需服务器部署</li>
+                            <li>数据本地安全处理</li>
+                            <li>响应式界面设计</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="version-info">
+                    <h4>💻 软件信息</h4>
+                    <p><strong>版本：</strong>v4.3 增强版</p>
+                    <p><strong>兼容性：</strong>现代浏览器 (ES6+)</p>
+                    <p><strong>许可证：</strong>MIT</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -1980,6 +2247,20 @@
                 button.textContent = '展开设置';
             }
         }
+        
+        /**
+         * 显示关于软件弹窗
+         */
+        function showAboutModal() {
+            document.getElementById('aboutModal').style.display = 'block';
+        }
+        
+        /**
+         * 隐藏关于软件弹窗
+         */
+        function hideAboutModal() {
+            document.getElementById('aboutModal').style.display = 'none';
+        }
 
         // ====================================================================
         // 事件监听器和初始化
@@ -1996,7 +2277,16 @@
             // 初始化剪贴板权限
             initializeClipboardPermission();
             
-            // 移除键盘快捷键以避免冲突
+            // 弹窗事件监听器
+            const modal = document.getElementById('aboutModal');
+            if (modal) {
+                // 点击背景区域关闭弹窗
+                modal.addEventListener('click', function(event) {
+                    if (event.target === modal) {
+                        hideAboutModal();
+                    }
+                });
+            }
             
             console.log('Tag格式转换器已初始化 - 支持Danbooru/Gelbooru/Standard格式 + 自定义过滤');
         });

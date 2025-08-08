@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>过滤器修复测试</title>
+</head>
+<body>
+    <h2>过滤器修复测试</h2>
+    <p>测试"censored"不会错误匹配"uncensored"</p>
+    
+    <script>
+        // 模拟修复后的compilePatterns逻辑
+        function compilePattern(keyword) {
+            const trimmedKeyword = keyword.trim();
+            
+            try {
+                // 检查是否已经包含完全匹配的边界标记
+                const hasStartAnchor = trimmedKeyword.startsWith('^');
+                const hasEndAnchor = trimmedKeyword.endsWith('$');
+                const hasWordBoundary = trimmedKeyword.includes('\\b');
+                
+                let finalPattern = trimmedKeyword;
+                
+                // 如果没有任何边界限制，则添加词边界以确保完全匹配
+                if (!hasStartAnchor && !hasEndAnchor && !hasWordBoundary) {
+                    finalPattern = `^${trimmedKeyword}$`;
+                }
+                
+                return new RegExp(finalPattern, 'i');
+            } catch (error) {
+                // 正则表达式编译失败，当作普通字符串处理
+                const escapedKeyword = trimmedKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                return new RegExp(`^${escapedKeyword}$`, 'i');
+            }
+        }
+        
+        // 测试用例
+        const testCases = [
+            { filter: 'censored', test: 'uncensored', shouldMatch: false },
+            { filter: 'censored', test: 'censored', shouldMatch: true },
+            { filter: 'censored', test: 'CENSORED', shouldMatch: true },
+            { filter: 'girl', test: 'girls', shouldMatch: false },
+            { filter: 'girl', test: 'girl', shouldMatch: true },
+            { filter: '\\d+px', test: '100px', shouldMatch: true },
+            { filter: '\\d+px', test: 'px100', shouldMatch: false }
+        ];
+        
+        console.log('=== 过滤器修复测试结果 ===');
+        testCases.forEach((testCase, index) => {
+            const pattern = compilePattern(testCase.filter);
+            const actualMatch = pattern.test(testCase.test);
+            const passed = actualMatch === testCase.shouldMatch;
+            
+            console.log(`测试 ${index + 1}: ${passed ? '✅ 通过' : '❌ 失败'}`);
+            console.log(`  过滤词: "${testCase.filter}"`);
+            console.log(`  测试词: "${testCase.test}"`);
+            console.log(`  期望匹配: ${testCase.shouldMatch}, 实际匹配: ${actualMatch}`);
+            console.log(`  正则表达式: ${pattern}`);
+            console.log('');
+        });
+        
+        // 在页面显示结果
+        const results = testCases.map((testCase, index) => {
+            const pattern = compilePattern(testCase.filter);
+            const actualMatch = pattern.test(testCase.test);
+            const passed = actualMatch === testCase.shouldMatch;
+            
+            return `<div style="margin: 10px; padding: 10px; border: 1px solid ${passed ? 'green' : 'red'}; border-radius: 5px;">
+                <strong>测试 ${index + 1}: ${passed ? '✅ 通过' : '❌ 失败'}</strong><br>
+                过滤词: "${testCase.filter}"<br>
+                测试词: "${testCase.test}"<br>
+                期望匹配: ${testCase.shouldMatch}, 实际匹配: ${actualMatch}<br>
+                正则表达式: ${pattern}
+            </div>`;
+        }).join('');
+        
+        document.body.innerHTML += '<div style="margin-top: 20px;">' + results + '</div>';
+    </script>
+</body>
+</html>
