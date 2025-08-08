@@ -489,12 +489,34 @@
                     </div>
                 </div>
                 
+                <!-- 提示词简化功能 -->
+                <div class="filter-input-group" style="margin-top: 1.5rem;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <label style="font-weight: 600; color: #1d1d1f; font-size: 14px;">
+                            🔄 提示词简化
+                        </label>
+                        <label class="filter-toggle">
+                            <input type="checkbox" id="simplify-enabled" onchange="toggleSimplify()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="filter-help">
+                        自动移除被其他提示词完全包含的冗余词汇 <br>
+                        • 例如：移除"hat"当存在"red hat"时 <br>
+                        • 确保词汇的完整性，避免误删 <br>
+                        • 在关键词过滤之后应用，优先级较低
+                    </div>
+                </div>
+                
                 <div class="filter-stats">
                     <div class="filter-stat">
                         过滤规则: <span id="filter-count">0</span>个
                     </div>
                     <div class="filter-stat">
                         上次过滤: <span id="filtered-count">0</span>个标签
+                    </div>
+                    <div class="filter-stat">
+                        简化移除: <span id="simplified-count">0</span>个标签
                     </div>
                 </div>
             </div>
@@ -577,7 +599,8 @@
             FILTER: {
                 STORAGE_KEY: 'tagConverter_filterSettings',
                 DEFAULT_ENABLED: false,
-                DEFAULT_KEYWORDS: []
+                DEFAULT_KEYWORDS: [],
+                DEFAULT_SIMPLIFY_ENABLED: false  // 提示词简化功能默认关闭
             }
         };
 
@@ -592,6 +615,7 @@
          * - 管理用户自定义的过滤关键词列表
          * - 支持正则表达式和普通字符串匹配
          * - 提供过滤器启用/禁用控制
+         * - 提示词简化：移除被其他提示词完全包含的冗余词汇
          * - 持久化存储用户设置到localStorage
          * - 实时统计过滤效果
          * 
@@ -599,11 +623,13 @@
          * - 过滤不需要的tag（如watermark、nsfw等）
          * - 使用正则表达式过滤特定模式（如\d+px）
          * - 过滤包含空格的词组（如bad quality、beautiful girl）
+         * - 简化提示词（如移除"hat"当存在"red hat"时）
          * 
          * 技术特点：
          * - 智能正则编译：自动检测并编译正则表达式
          * - 错误容错：无效正则自动转为普通字符串匹配
          * - 性能优化：预编译模式，避免重复解析
+         * - 包含检测算法：高效的提示词冗余检测
          * - 数据持久化：localStorage存储，刷新保持设置
          */
         class FilterManager {
@@ -612,6 +638,10 @@
                 this.keywords = [...CONFIG.FILTER.DEFAULT_KEYWORDS];
                 this.patterns = [];
                 this.lastFilteredCount = 0;
+                
+                // 提示词简化功能状态
+                this.simplifyEnabled = CONFIG.FILTER.DEFAULT_SIMPLIFY_ENABLED;
+                this.lastSimplifiedCount = 0;
                 
                 this.loadSettings();
                 this.compilePatterns();
@@ -627,6 +657,7 @@
                         const settings = JSON.parse(saved);
                         this.enabled = settings.enabled ?? CONFIG.FILTER.DEFAULT_ENABLED;
                         this.keywords = settings.keywords ?? [...CONFIG.FILTER.DEFAULT_KEYWORDS];
+                        this.simplifyEnabled = settings.simplifyEnabled ?? CONFIG.FILTER.DEFAULT_SIMPLIFY_ENABLED;
                         this.compilePatterns();
                     }
                 } catch (error) {
@@ -641,7 +672,8 @@
                 try {
                     const settings = {
                         enabled: this.enabled,
-                        keywords: this.keywords
+                        keywords: this.keywords,
+                        simplifyEnabled: this.simplifyEnabled
                     };
                     localStorage.setItem(CONFIG.FILTER.STORAGE_KEY, JSON.stringify(settings));
                 } catch (error) {
@@ -696,6 +728,15 @@
             }
             
             /**
+             * 设置提示词简化功能启用状态
+             * @param {boolean} enabled - 是否启用提示词简化
+             */
+            setSimplifyEnabled(enabled) {
+                this.simplifyEnabled = Boolean(enabled);
+                this.saveSettings();
+            }
+            
+            /**
              * 设置过滤关键词
              * @param {string} keywordString - 逗号分隔的关键词字符串
              */
@@ -710,39 +751,109 @@
             }
             
             /**
-             * 应用过滤器到tag列表
+             * 应用过滤器到tag列表 - 两阶段过滤处理
              * 
              * @param {string[]} tags - 原始tag列表
              * @returns {string[]} - 过滤后的tag列表
              * 
-             * 过滤逻辑：
-             * 1. 检查过滤器是否启用且有过滤规则
-             * 2. 遍历每个tag，测试是否匹配任一过滤规则
-             * 3. 保留不匹配任何过滤规则的tag
-             * 4. 统计被过滤的tag数量
+             * 过滤逻辑（按优先级顺序）：
+             * 1. 第一阶段：关键词过滤（如启用）
+             * 2. 第二阶段：提示词简化（如启用）
+             * 3. 统计各阶段过滤的tag数量
              * 
              * 性能考虑：
-             * - 未启用时直接返回，避免不必要的处理
+             * - 未启用时直接跳过对应阶段，避免不必要的处理
              * - 使用Array.filter和some方法实现高效过滤
              * - 一旦匹配到规则立即停止检查（短路逻辑）
              */
             applyFilter(tags) {
-                // 快速路径：过滤器未启用或无过滤规则
-                if (!this.enabled || this.patterns.length === 0) {
-                    this.lastFilteredCount = 0;
-                    return tags;
+                let currentTags = [...tags];
+                this.lastFilteredCount = 0;
+                this.lastSimplifiedCount = 0;
+                
+                // 第一阶段：关键词过滤（优先级高）
+                if (this.enabled && this.patterns.length > 0) {
+                    const filtered = currentTags.filter(tag => {
+                        // 检查tag是否匹配任一过滤规则
+                        // 使用some方法实现短路逻辑，提高性能
+                        return !this.patterns.some(pattern => pattern.test(tag));
+                    });
+                    
+                    this.lastFilteredCount = currentTags.length - filtered.length;
+                    currentTags = filtered;
                 }
                 
-                // 应用过滤规则
-                const filtered = tags.filter(tag => {
-                    // 检查tag是否匹配任一过滤规则
-                    // 使用some方法实现短路逻辑，提高性能
-                    return !this.patterns.some(pattern => pattern.test(tag));
-                });
+                // 第二阶段：提示词简化（优先级低）
+                if (this.simplifyEnabled) {
+                    const simplified = this.simplifyTags(currentTags);
+                    this.lastSimplifiedCount = currentTags.length - simplified.length;
+                    currentTags = simplified;
+                }
                 
-                // 统计被过滤掉的tag数量，用于UI显示
-                this.lastFilteredCount = tags.length - filtered.length;
-                return filtered;
+                return currentTags;
+            }
+            
+            /**
+             * 提示词简化算法 - 移除被其他提示词完全包含的冗余词汇
+             * 
+             * @param {string[]} tags - 输入的tag列表
+             * @returns {string[]} - 简化后的tag列表
+             * 
+             * 算法原理：
+             * 1. 对每个tag，检查是否被其他更长的tag完全包含
+             * 2. 如果tag A完全包含在tag B中（作为独立词汇），则移除tag A
+             * 3. 使用词边界匹配确保精确匹配，避免误删
+             * 
+             * 示例：
+             * - 输入：["hat", "red hat", "blue eyes"]
+             * - 输出：["red hat", "blue eyes"]  (移除"hat"因为被"red hat"包含)
+             * 
+             * 性能优化：
+             * - 按长度排序，优先检查较短的词汇
+             * - 使用正则表达式词边界确保精确匹配
+             * - 一旦发现包含关系立即跳过该词汇
+             */
+            simplifyTags(tags) {
+                if (!tags || tags.length <= 1) return tags;
+                
+                // 按长度排序，短的在前面（更可能被包含）
+                const sortedTags = tags.slice().sort((a, b) => a.length - b.length);
+                const result = [];
+                
+                for (let i = 0; i < sortedTags.length; i++) {
+                    const currentTag = sortedTags[i];
+                    let isContained = false;
+                    
+                    // 检查当前tag是否被其他tag包含
+                    for (let j = i + 1; j < sortedTags.length; j++) {
+                        const longerTag = sortedTags[j];
+                        
+                        // 使用词边界正则确保精确匹配
+                        // 例如：确保"hat"只匹配"red hat"中的完整词汇，而不匹配"hats"
+                        const pattern = new RegExp(`\\b${this.escapeRegex(currentTag)}\\b`, 'i');
+                        
+                        if (pattern.test(longerTag)) {
+                            isContained = true;
+                            break;
+                        }
+                    }
+                    
+                    // 如果没有被包含，则保留该tag
+                    if (!isContained) {
+                        result.push(currentTag);
+                    }
+                }
+                
+                return result;
+            }
+            
+            /**
+             * 转义正则表达式特殊字符
+             * @param {string} str - 需要转义的字符串
+             * @returns {string} - 转义后的字符串
+             */
+            escapeRegex(str) {
+                return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             }
             
             /**
@@ -752,8 +863,10 @@
             getStatus() {
                 return {
                     enabled: this.enabled,
+                    simplifyEnabled: this.simplifyEnabled,
                     keywordCount: this.keywords.length,
                     lastFilteredCount: this.lastFilteredCount,
+                    lastSimplifiedCount: this.lastSimplifiedCount,
                     keywords: this.keywords
                 };
             }
@@ -1025,7 +1138,10 @@
                     filterCount: document.getElementById('filter-count'),
                     filteredCount: document.getElementById('filtered-count'),
                     filterExpand: document.getElementById('filter-expand'),
-                    filterContent: document.getElementById('filter-content')
+                    filterContent: document.getElementById('filter-content'),
+                    // 提示词简化功能的UI元素
+                    simplifyEnabled: document.getElementById('simplify-enabled'),
+                    simplifiedCount: document.getElementById('simplified-count')
                 };
             }
             
@@ -1106,6 +1222,9 @@
                 if (this.elements.filteredCount) {
                     this.elements.filteredCount.textContent = status.lastFilteredCount;
                 }
+                if (this.elements.simplifiedCount) {
+                    this.elements.simplifiedCount.textContent = status.lastSimplifiedCount;
+                }
             }
             
             /**
@@ -1121,6 +1240,11 @@
                 
                 if (this.elements.filterKeywords) {
                     this.elements.filterKeywords.value = status.keywords.join(', ');
+                }
+                
+                // 初始化提示词简化功能的UI状态
+                if (this.elements.simplifyEnabled) {
+                    this.elements.simplifyEnabled.checked = status.simplifyEnabled;
                 }
                 
                 this.updateFilterStatus(status);
@@ -1339,6 +1463,28 @@
         function toggleFilter() {
             const enabled = document.getElementById('filter-enabled').checked;
             tagConverter.filterManager.setEnabled(enabled);
+            
+            // 重新转换当前内容
+            convert();
+        }
+        
+        /**
+         * 切换提示词简化功能启用状态
+         * 
+         * 操作流程：
+         * 1. 读取用户切换状态
+         * 2. 更新FilterManager简化设置
+         * 3. 自动保存到localStorage
+         * 4. 重新转换当前内容以应用新设置
+         * 
+         * 功能说明：
+         * - 启用后自动移除被其他提示词完全包含的冗余词汇
+         * - 优先级低于关键词过滤，在关键词过滤之后执行
+         * - 实时更新：确保切换后立即看到效果
+         */
+        function toggleSimplify() {
+            const enabled = document.getElementById('simplify-enabled').checked;
+            tagConverter.filterManager.setSimplifyEnabled(enabled);
             
             // 重新转换当前内容
             convert();
