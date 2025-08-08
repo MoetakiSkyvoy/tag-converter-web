@@ -67,110 +67,119 @@
     </div>
 
     <script>
-        // 正则表达式匹配不同格式的权重数字
-        const danbooruPattern = /^\d+\.?\d*([kM]?)$/i; // Danbooru: 369 / 3.69k / 3M
-        const gelbooruPattern = /^\d+$/; // Gelbooru: 纯数字
-
-        // 检测输入格式
-        function detectFormat(lines) {
-            // 检查是否有Gelbooru格式的标识符
-            const gelbooruMarkers = ['Artist?', 'Character?', 'Copyright?', 'Tag?', 'Metadata?'];
-            const hasGelbooruMarkers = lines.some(line => 
-                gelbooruMarkers.some(marker => line.startsWith(marker))
-            );
+        // 统一算法处理流程
+        
+        // 1. 格式检测：区分Danbooru（有换行）和Gelbooru（无换行）
+        function detectFormat(input) {
+            const hasNewlines = input.includes('\n');
+            const hasGelbooruMarkers = /(?:Artist|Character|Copyright|Tag|Metadata)\?/i.test(input);
+            const hasQuestionMarks = input.includes('?');
             
-            if (hasGelbooruMarkers) return 'gelbooru';
-            
-            // 检查是否有Danbooru格式的单独"?"行
-            if (lines.includes('?')) return 'danbooru';
-            
-            return 'unknown';
+            if (!hasNewlines && hasGelbooruMarkers) return 'gelbooru';
+            if (hasNewlines && hasQuestionMarks) return 'danbooru';
+            if (!hasNewlines && hasQuestionMarks) return 'gelbooru'; // 单行带?的也是gelbooru
+            return 'standard'; // 已经是标准格式（逗号分隔）
         }
-
-        function convertDanbooru(lines) {
-            const tags = [];
-            let i = 0;
-
-            while (i < lines.length) {
-                if (lines[i] === '?') {
-                    if (i + 1 < lines.length) {
-                        const currentLine = lines[i + 1];
-                        const parts = currentLine.split(/\s+(?![^(]*\))/);
-                        if (parts.length > 0) {
-                            const lastPart = parts[parts.length - 1];
-                            if (danbooruPattern.test(lastPart)) {
-                                const validTag = parts.slice(0, -1).join(' ');
-                                tags.push(validTag);
-                            } else {
-                                tags.push(currentLine);
-                            }
-                        }
-                    }
-                    i += 2;
-                } else {
-                    i++;
-                }
-            }
-            return tags;
-        }
-
-        function convertGelbooru(lines) {
-            const tags = [];
-            const text = lines.join(''); // 合并所有行
-            
-            // 按?分割得到所有片段
-            const segments = text.split('?');
-            
-            for (let i = 0; i < segments.length; i++) {
-                let segment = segments[i].trim();
-                if (!segment) continue;
-                
-                // 检查是否以分类标识符开头
-                const categoryMatch = segment.match(/^(Artist|Character|Copyright|Metadata|Tag)\s+(.*)$/);
-                
-                if (categoryMatch) {
-                    // 这是一个分类标识符，处理后面的内容
-                    let content = categoryMatch[2];
-                    
-                    // 移除末尾的数字，但保留可能跟在后面的下一个分类标识符
-                    content = content.replace(/\s+\d+\s*(Artist|Character|Copyright|Metadata|Tag)?.*$/, '').trim();
-                    
-                    if (content) {
-                        tags.push(content);
-                    }
-                } else {
-                    // 这是普通内容，移除末尾的数字
-                    segment = segment.replace(/\s+\d+.*$/, '').trim();
-                    
-                    // 排除空内容和纯分类标识符
-                    if (segment && 
-                        segment.length > 1 && 
-                        !segment.match(/^(Artist|Character|Copyright|Metadata|Tag)$/i)) {
-                        tags.push(segment);
-                    }
-                }
-            }
-            
-            return tags;
-        }
-
-        function convert() {
-            const input = document.getElementById('input').value;
-            const lines = input.split('\n').map(line => line.trim()).filter(line => line);
-            
-            const format = detectFormat(lines);
-            let tags = [];
+        
+        // 2. 提取原始内容（移除格式标记）
+        function extractRawContent(input, format) {
+            let rawText = '';
             
             if (format === 'danbooru') {
-                tags = convertDanbooru(lines);
+                // 提取?后面的内容行
+                const lines = input.split('\n').map(line => line.trim());
+                const contents = [];
+                
+                for (let i = 0; i < lines.length; i++) {
+                    if (lines[i] === '?' && i + 1 < lines.length) {
+                        contents.push(lines[i + 1]);
+                        i++; // 跳过下一行
+                    }
+                }
+                rawText = contents.join(', '); // 用逗号连接，保持结构
+                
             } else if (format === 'gelbooru') {
-                tags = convertGelbooru(lines);
+                // 先处理Gelbooru格式：提取每个?后面的内容，移除数字和分类词
+                const segments = input.split('?');
+                const processedSegments = [];
+                
+                for (let i = 0; i < segments.length; i++) {
+                    let segment = segments[i].trim();
+                    if (!segment) continue;
+                    
+                    // 检查是否以分类词开头
+                    const categoryMatch = segment.match(/^(Artist|Character|Copyright|Metadata|Tag)\s+(.*)$/);
+                    if (categoryMatch) {
+                        // 提取分类词后面的内容
+                        let content = categoryMatch[2];
+                        // 移除末尾数字和可能的下一个分类词
+                        content = content.replace(/\s+\d+\s*(Artist|Character|Copyright|Metadata|Tag)?.*$/, '').trim();
+                        if (content) {
+                            processedSegments.push(content);
+                        }
+                    } else {
+                        // 普通内容，移除末尾数字
+                        segment = segment.replace(/\s+\d+.*$/, '').trim();
+                        if (segment && segment.length > 1) {
+                            processedSegments.push(segment);
+                        }
+                    }
+                }
+                
+                rawText = processedSegments.join(', ');
             } else {
-                // 尝试通用处理
-                tags = convertDanbooru(lines);
+                // 标准格式，直接使用
+                rawText = input;
             }
-
-            document.getElementById('output').textContent = tags.join(', ');
+            
+            return rawText;
+        }
+        
+        // 3. 统一清理处理
+        function cleanContent(rawText) {
+            // 按逗号分割处理每个tag
+            const segments = rawText.split(',').map(segment => segment.trim());
+            const cleanedTags = [];
+            
+            segments.forEach(segment => {
+                if (!segment) return;
+                
+                // Step 1: 跳过纯分类标识符
+                const categoryWords = ['Artist', 'Character', 'Copyright', 'Tag', 'Metadata', 'General'];
+                if (categoryWords.some(word => word.toLowerCase() === segment.toLowerCase())) {
+                    return;
+                }
+                
+                // Step 2: 删除末尾的数字权重
+                let cleaned = segment.replace(/\s+\d+\.?\d*[kM]?\s*$/, '').trim();
+                
+                // Step 3: 清理多余空格
+                cleaned = cleaned.replace(/\s+/g, ' ').trim();
+                
+                // Step 4: 验证并添加有效的tag
+                if (cleaned && cleaned.length > 0) {
+                    cleanedTags.push(cleaned);
+                }
+            });
+            
+            return cleanedTags;
+        }
+        
+        // 主转换函数
+        function convert() {
+            const input = document.getElementById('input').value.trim();
+            if (!input) {
+                document.getElementById('output').textContent = '';
+                return;
+            }
+            
+            // 执行统一处理流程
+            const format = detectFormat(input);
+            const rawContent = extractRawContent(input, format);
+            const cleanedTags = cleanContent(rawContent);
+            
+            // 输出结果
+            document.getElementById('output').textContent = cleanedTags.join(', ');
         }
 
         function copyOutput(button) {
