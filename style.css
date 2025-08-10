@@ -689,7 +689,7 @@ input:checked + .toggle-slider:before {
 }
 
 .keyword-input {
-    width: 100%;
+    flex: 1;
     border: none;
     outline: none;
     font-size: 13px;
@@ -697,6 +697,7 @@ input:checked + .toggle-slider:before {
     min-height: 24px;
     padding: 4px 0;
     background: transparent;
+    min-width: 100px;
 }
 
 .keywords-help, .replacement-help, .filter-help {
