@@ -675,6 +675,7 @@ input:checked + .toggle-slider:before {
 
 .keywords-tags-display:empty {
     margin-bottom: 0;
+    display: none;
 }
 
 .keyword-tag {
