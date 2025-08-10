@@ -646,33 +646,35 @@ input:checked + .toggle-slider:before {
     color: #666;
 }
 
-/* 关键词编辑器 */
-.keywords-editor {
-    background: white;
+/* 简化的关键词输入框 */
+.keyword-input-simple {
+    width: 100%;
+    padding: 10px;
     border: 2px solid #e5e5e7;
     border-radius: 8px;
-    min-height: 80px;
-    padding: 8px;
-    cursor: text;
+    font-size: 13px;
     transition: border-color 0.2s ease;
-    display: flex;
-    flex-direction: column;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+    margin-bottom: 0.75rem;
 }
 
-.keywords-editor:focus-within {
+.keyword-input-simple:focus {
+    outline: none;
     border-color: #007AFF;
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
 }
 
-.keywords-tags {
+/* 关键词标签显示区域 */
+.keywords-tags-display {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
-    margin-bottom: 0.5rem;
-    flex: 1;
-    cursor: text;
-    min-height: 32px;
-    align-items: flex-start;
+    margin-bottom: 0.75rem;
+    min-height: 0;
+}
+
+.keywords-tags-display:empty {
+    margin-bottom: 0;
 }
 
 .keyword-tag {
@@ -726,17 +728,6 @@ input:checked + .toggle-slider:before {
     color: white;
 }
 
-.keyword-input {
-    flex: 1;
-    border: none;
-    outline: none;
-    font-size: 13px;
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
-    min-height: 24px;
-    padding: 4px 0;
-    background: transparent;
-    min-width: 100px;
-}
 
 .keywords-help, .replacement-help, .filter-help {
     font-size: 12px;

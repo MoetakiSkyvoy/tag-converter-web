@@ -2348,7 +2348,7 @@ function createGroupElement(group) {
  * @param {Group} group - 组数据
  */
 function renderGroupKeywords(groupElement, group) {
-    const keywordsContainer = groupElement.querySelector('.keywords-tags');
+    const keywordsContainer = groupElement.querySelector('.keywords-tags-display');
     if (!keywordsContainer) return;
     
     keywordsContainer.innerHTML = '';
@@ -2499,7 +2499,7 @@ function toggleGroupExpand(button) {
     // 如果展开，聚焦到关键词输入框
     if (newExpanded) {
         setTimeout(() => {
-            const keywordInput = groupContent.querySelector('.keyword-input');
+            const keywordInput = groupContent.querySelector('.keyword-input-simple');
             if (keywordInput) {
                 keywordInput.focus();
             }
@@ -2676,7 +2676,7 @@ function addKeywordFromInput(input) {
  * @param {HTMLElement} container - 关键词容器
  */
 function focusKeywordInput(container) {
-    const input = container.parentElement?.querySelector('.keyword-input');
+    const input = container.parentElement?.querySelector('.keyword-input-simple');
     if (input) {
         input.focus();
     }
