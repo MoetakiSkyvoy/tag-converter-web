@@ -458,7 +458,8 @@ input:checked + .toggle-slider:before {
 
 .group-toggle {
     position: relative;
-    display: inline-block;
+    display: flex;
+    align-items: center;
     width: 40px;
     height: 22px;
     flex-shrink: 0;
@@ -517,7 +518,7 @@ input:checked + .toggle-slider:before {
 }
 
 .expand-group-btn[aria-expanded="true"] {
-    transform: rotate(180deg);
+    /* 移除旋转动画，避免出戏 */
 }
 
 /* 组菜单 */
@@ -550,7 +551,7 @@ input:checked + .toggle-slider:before {
     border: 1px solid #e9ecef;
     border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    z-index: 10;
+    z-index: 1000;
     min-width: 140px;
 }
 
@@ -616,6 +617,8 @@ input:checked + .toggle-slider:before {
     padding: 8px;
     cursor: text;
     transition: border-color 0.2s ease;
+    display: flex;
+    flex-direction: column;
 }
 
 .keywords-editor:focus-within {
@@ -628,33 +631,54 @@ input:checked + .toggle-slider:before {
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 0.5rem;
+    flex: 1;
+    cursor: text;
 }
 
 .keyword-tag {
-    background: #007AFF;
-    color: white;
+    background: #f8f9fa;
+    color: #333;
+    border: 1px solid #007AFF;
     padding: 4px 8px;
-    border-radius: 6px;
+    border-radius: 4px;
     font-size: 12px;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
     display: flex;
     align-items: center;
     gap: 0.25rem;
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: all 0.2s ease;
 }
 
 .keyword-tag:hover {
-    background: #0056CC;
+    background: #007AFF;
+    color: white;
 }
 
 .keyword-tag .remove-tag {
     background: none;
     border: none;
-    color: white;
+    color: #666;
     cursor: pointer;
     font-size: 14px;
     padding: 0;
     line-height: 1;
+    border-radius: 2px;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.keyword-tag .remove-tag:hover {
+    background: #ff4757;
+    color: white;
+}
+
+.keyword-tag:hover .remove-tag {
+    color: white;
 }
 
 .keyword-input {
