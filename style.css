@@ -655,7 +655,6 @@ input:checked + .toggle-slider:before {
     font-size: 13px;
     transition: border-color 0.2s ease;
     font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
-    margin-bottom: 0.75rem;
 }
 
 .keyword-input-simple:focus {
