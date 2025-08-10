@@ -69,41 +69,60 @@
         
         <!-- 自定义过滤器区域 -->
         <section class="filter-section" id="filter-section">
+            <!-- 顶部工具区 -->
             <div class="filter-header">
                 <div class="filter-title">🎯 自定义过滤器</div>
-                <div style="display: flex; align-items: center; gap: 1rem;">
+                <div class="filter-toolbar">
                     <button class="expand-button" id="filter-expand" onclick="toggleFilterSection()">
                         展开设置
                     </button>
-                    <label class="filter-toggle">
+                    <label class="filter-toggle" title="自定义过滤器总开关">
                         <input type="checkbox" id="filter-enabled" onchange="toggleFilter()">
                         <span class="toggle-slider"></span>
                     </label>
+                    <button class="toolbar-btn" id="add-group-btn" onclick="addGroup()" title="新增组">
+                        ➕
+                    </button>
+                    <button class="toolbar-btn" id="import-btn" onclick="importConfig()" title="导入配置">
+                        📥
+                    </button>
+                    <button class="toolbar-btn" id="export-btn" onclick="exportConfig()" title="导出配置">
+                        📤
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 统计条 -->
+            <div class="filter-stats" id="filter-stats">
+                <div class="filter-stat">
+                    过滤规则: <span id="filter-count">0</span>
+                </div>
+                <div class="filter-stat">
+                    上次过滤: <span id="filtered-count">0</span>（总命中）
+                </div>
+                <div class="filter-stat">
+                    简化移除: <span id="simplified-count">0</span>
                 </div>
             </div>
             
             <div class="filter-collapsed" id="filter-content">
-                <div class="filter-input-group">
-                    <input 
-                        type="text" 
-                        class="filter-input" 
-                        id="filter-keywords" 
-                        placeholder="输入要过滤的关键词，用逗号分隔（支持正则表达式）"
-                        onchange="updateFilterKeywords()">
-                    <div class="filter-help">
-                        示例: "watermark, nsfw, bad quality, beautiful girl, \d+px" <br>
-                        • 所有关键词都被视为正则表达式，默认完全匹配 <br>
-                        • 逗号分隔多个过滤词 <br>
-                        • 普通字符串自动进行完全匹配（如"censored"不会匹配"uncensored"） <br>
-                        • 高级用户可使用^$或\b等边界符精确控制匹配规则 <br>
-                        • 过滤在格式化完成后应用
-                    </div>
+                <!-- 分组容器 -->
+                <div class="filter-groups" id="filter-groups">
+                    <!-- 分组将在这里动态生成 -->
+                </div>
+                
+                <!-- 空状态提示 -->
+                <div class="empty-state" id="empty-state" style="display: none;">
+                    <div class="empty-icon">📝</div>
+                    <div class="empty-text">暂无过滤组</div>
+                    <div class="empty-desc">点击上方"➕"按钮添加第一个过滤组</div>
+                    <button class="empty-action" onclick="addGroup()">新增组</button>
                 </div>
                 
                 <!-- 提示词简化功能 -->
-                <div class="filter-input-group" style="margin-top: 1.5rem;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                        <label style="font-weight: 600; color: #1d1d1f; font-size: 14px;">
+                <div class="simplify-section">
+                    <div class="simplify-header">
+                        <label class="simplify-title">
                             🔄 提示词简化
                         </label>
                         <label class="filter-toggle" id="simplify-toggle">
@@ -115,25 +134,93 @@
                         自动移除被其他提示词完全包含的冗余词汇 <br>
                         • 例如：移除"hat"当存在"red hat"时 <br>
                         • 确保词汇的完整性，避免误删 <br>
-                        • 在关键词过滤之后应用，优先级较低
-                    </div>
-                </div>
-                
-                <div class="filter-stats">
-                    <div class="filter-stat">
-                        过滤规则: <span id="filter-count">0</span>个
-                    </div>
-                    <div class="filter-stat">
-                        上次过滤: <span id="filtered-count">0</span>个标签
-                    </div>
-                    <div class="filter-stat">
-                        简化移除: <span id="simplified-count">0</span>个标签
+                        • 在分组过滤之后应用，优先级较低
                     </div>
                 </div>
             </div>
         </section>
         
+        <!-- 隐藏的文件输入 -->
+        <input type="file" id="import-file" accept=".json" style="display: none;" onchange="handleImportFile(event)">
+        
     </div>
+    
+    <!-- 组卡片模板 (隐藏) -->
+    <template id="group-card-template">
+        <div class="group-card" data-group-id="">
+            <!-- 折叠态头部 -->
+            <div class="group-header">
+                <div class="drag-handle" aria-label="拖拽以改变组顺序" title="拖拽排序">
+                    ☰
+                </div>
+                <label class="group-toggle">
+                    <input type="checkbox" class="group-enabled" onchange="toggleGroup(this)">
+                    <span class="toggle-slider"></span>
+                </label>
+                <input type="text" class="group-name" placeholder="组名" onchange="updateGroupName(this)" onblur="saveGroupName(this)">
+                <div class="group-match-badge" title="上次命中数量">
+                    •0
+                </div>
+                <button class="expand-group-btn" onclick="toggleGroupExpand(this)" aria-expanded="false" title="展开组设置">
+                    ▼
+                </button>
+                <div class="group-menu">
+                    <button class="menu-toggle" onclick="toggleGroupMenu(this)" title="更多操作">
+                        ⋯
+                    </button>
+                    <div class="menu-dropdown" style="display: none;">
+                        <button onclick="duplicateGroup(this)" class="menu-item">
+                            📋 复制组
+                        </button>
+                        <button onclick="clearGroupMatchCount(this)" class="menu-item">
+                            🔄 清零命中计数
+                        </button>
+                        <button onclick="deleteGroup(this)" class="menu-item delete-item">
+                            🗑️ 删除组
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 展开态内容 -->
+            <div class="group-content" style="display: none;">
+                <!-- 关键词编辑区 -->
+                <div class="group-section">
+                    <label class="section-label">过滤关键词</label>
+                    <div class="keywords-editor">
+                        <div class="keywords-tags" onclick="focusKeywordInput(this)"></div>
+                        <input type="text" class="keyword-input" placeholder="输入关键词后按回车添加，支持正则表达式" onkeydown="handleKeywordInput(event)" onblur="addKeywordFromInput(this)">
+                    </div>
+                    <div class="keywords-help">
+                        • 支持正则表达式和普通字符串匹配
+                        • 可批量粘贴逗号分隔的关键词
+                        • 点击标签可删除对应关键词
+                    </div>
+                </div>
+                
+                <!-- 替换短语区 -->
+                <div class="group-section">
+                    <label class="section-label">替换短语 <span class="optional">(可选)</span></label>
+                    <input type="text" class="replacement-input" placeholder="用", "分隔多个替换标签，留空仅删除" onchange="updateReplacement(this)" oninput="validateReplacement(this)">
+                    <div class="replacement-error" role="alert" style="display: none;">
+                        ⚠️ 替换短语格式错误：请使用"标签1, 标签2"格式（逗号后必须跟空格）
+                    </div>
+                    <div class="replacement-help">
+                        • 留空表示仅删除匹配的标签
+                        • 多个替换标签请用", "（逗号+空格）分隔
+                        • 替换标签将插入到首次命中的原位置
+                    </div>
+                </div>
+                
+                <!-- 操作按钮 -->
+                <div class="group-actions">
+                    <button onclick="toggleGroupExpand(this)" class="collapse-btn">
+                        收起 ▲
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
     
     <!-- 简化页脚 -->
     <footer class="footer">
