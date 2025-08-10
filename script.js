@@ -62,18 +62,772 @@ const CONFIG = {
     // 过滤器相关配置
     FILTER: {
         STORAGE_KEY: 'tagConverter_filterSettings',
+        GROUPED_STORAGE_KEY: 'tagConverter_groupedFilterSettings', // 分组版本配置key
         DEFAULT_ENABLED: false,
         DEFAULT_KEYWORDS: [],
-        DEFAULT_SIMPLIFY_ENABLED: false  // 提示词简化功能默认关闭
+        DEFAULT_SIMPLIFY_ENABLED: false,  // 提示词简化功能默认关闭
+        SCHEMA_VERSION: 1, // 数据结构版本
+        DEFAULT_GROUP_NAME_PREFIX: '组' // 默认组名前缀
     }
 };
+
+// ====================================================================
+// 过滤器数据结构定义
+// ====================================================================
+
+/**
+ * 生成UUID
+ * @returns {string} UUID字符串
+ */
+function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+/**
+ * 过滤组数据结构
+ * @typedef {Object} Group
+ * @property {string} id - 稳定ID（UUID）
+ * @property {string} name - 组名
+ * @property {boolean} enabled - 是否启用
+ * @property {boolean} collapsed - 折叠状态
+ * @property {string[]} keywords - 关键词原始文本数组
+ * @property {string} replacement - 替换短语的原始输入
+ * @property {Object} meta - 元数据
+ * @property {number} meta.lastMatchCount - 上次命中数
+ */
+
+/**
+ * 过滤器配置数据结构
+ * @typedef {Object} FilterConfig
+ * @property {boolean} masterEnabled - 自定义过滤器总开关
+ * @property {Group[]} groups - 有序数组（执行顺序）
+ * @property {number} schemaVersion - Schema 版本
+ * @property {boolean} simplifyEnabled - 提示词简化开关
+ */
+
+/**
+ * 创建默认组
+ * @param {string} name - 组名
+ * @returns {Group}
+ */
+function createDefaultGroup(name = '') {
+    return {
+        id: generateUUID(),
+        name: name || `${CONFIG.FILTER.DEFAULT_GROUP_NAME_PREFIX} ${Date.now()}`,
+        enabled: true,
+        collapsed: true,
+        keywords: [],
+        replacement: '',
+        meta: {
+            lastMatchCount: 0
+        }
+    };
+}
 
 // ====================================================================
 // 过滤器管理模块
 // ====================================================================
 
 /**
- * FilterManager - 自定义过滤器管理类
+ * GroupedFilterManager - 分组过滤器管理类
+ * 
+ * 功能说明：
+ * - 管理多个分组的过滤规则
+ * - 支持组的增删改查和拖拽排序
+ * - 支持替换短语功能
+ * - 支持导入导出配置
+ * - 提示词简化功能
+ * - 兼容旧版本配置自动迁移
+ * 
+ * 执行顺序：分组过滤 → 提示词简化
+ */
+class GroupedFilterManager {
+    constructor() {
+        // 总开关状态
+        this.masterEnabled = CONFIG.FILTER.DEFAULT_ENABLED;
+        
+        // 分组数据
+        this.groups = [];
+        
+        // 提示词简化功能
+        this.simplifyEnabled = CONFIG.FILTER.DEFAULT_SIMPLIFY_ENABLED;
+        this.lastSimplifiedCount = 0;
+        
+        // 总体统计
+        this.lastTotalFilteredCount = 0;
+        
+        // 初始化
+        this.loadSettings();
+    }
+    
+    // ====================================================================
+    // 设置管理
+    // ====================================================================
+    
+    /**
+     * 加载设置
+     */
+    loadSettings() {
+        try {
+            // 首先尝试加载分组版本配置
+            const groupedSettings = localStorage.getItem(CONFIG.FILTER.GROUPED_STORAGE_KEY);
+            
+            if (groupedSettings) {
+                this._loadGroupedSettings(JSON.parse(groupedSettings));
+            } else {
+                // 尝试从旧版本配置迁移
+                this._migrateFromOldSettings();
+            }
+        } catch (error) {
+            console.warn('无法加载过滤器设置:', error);
+            // 创建默认组
+            this._initializeDefaults();
+        }
+    }
+    
+    /**
+     * 加载分组版本设置
+     * @param {FilterConfig} settings
+     */
+    _loadGroupedSettings(settings) {
+        this.masterEnabled = settings.masterEnabled ?? CONFIG.FILTER.DEFAULT_ENABLED;
+        this.simplifyEnabled = settings.simplifyEnabled ?? CONFIG.FILTER.DEFAULT_SIMPLIFY_ENABLED;
+        
+        // 加载组数据，确保字段完整性
+        this.groups = (settings.groups || []).map(group => ({
+            id: group.id || generateUUID(),
+            name: group.name || '未命名组',
+            enabled: group.enabled ?? true,
+            collapsed: group.collapsed ?? true,
+            keywords: group.keywords || [],
+            replacement: group.replacement || '',
+            meta: {
+                lastMatchCount: group.meta?.lastMatchCount ?? 0,
+                ...group.meta
+            }
+        }));
+    }
+    
+    /**
+     * 从旧版本配置迁移
+     */
+    _migrateFromOldSettings() {
+        try {
+            const oldSettings = localStorage.getItem(CONFIG.FILTER.STORAGE_KEY);
+            if (oldSettings) {
+                const settings = JSON.parse(oldSettings);
+                
+                this.masterEnabled = settings.enabled ?? CONFIG.FILTER.DEFAULT_ENABLED;
+                this.simplifyEnabled = settings.simplifyEnabled ?? CONFIG.FILTER.DEFAULT_SIMPLIFY_ENABLED;
+                
+                // 如果有旧关键词，创建迁移组
+                if (settings.keywords && settings.keywords.length > 0) {
+                    const migratedGroup = createDefaultGroup('组 1');
+                    migratedGroup.keywords = [...settings.keywords];
+                    this.groups = [migratedGroup];
+                }
+                
+                // 保存迁移后的设置
+                this.saveSettings();
+                
+                console.info('已从旧版本配置迁移到分组版本');
+            } else {
+                this._initializeDefaults();
+            }
+        } catch (error) {
+            console.warn('配置迁移失败:', error);
+            this._initializeDefaults();
+        }
+    }
+    
+    /**
+     * 初始化默认设置
+     */
+    _initializeDefaults() {
+        this.masterEnabled = CONFIG.FILTER.DEFAULT_ENABLED;
+        this.simplifyEnabled = CONFIG.FILTER.DEFAULT_SIMPLIFY_ENABLED;
+        this.groups = [];
+    }
+    
+    /**
+     * 保存设置
+     */
+    saveSettings() {
+        try {
+            const settings = {
+                masterEnabled: this.masterEnabled,
+                simplifyEnabled: this.simplifyEnabled,
+                groups: this.groups,
+                schemaVersion: CONFIG.FILTER.SCHEMA_VERSION,
+                exportedAt: new Date().toISOString()
+            };
+            localStorage.setItem(CONFIG.FILTER.GROUPED_STORAGE_KEY, JSON.stringify(settings));
+        } catch (error) {
+            console.warn('无法保存过滤器设置:', error);
+        }
+    }
+    
+    // ====================================================================
+    // 状态管理
+    // ====================================================================
+    
+    /**
+     * 获取过滤器状态信息
+     * @returns {Object} 状态信息
+     */
+    getStatus() {
+        const totalGroups = this.groups.length;
+        const enabledGroups = this.groups.filter(g => g.enabled).length;
+        
+        return {
+            enabled: this.masterEnabled,
+            simplifyEnabled: this.simplifyEnabled,
+            keywordCount: totalGroups, // 显示组数而不是关键词数
+            enabledGroupCount: enabledGroups,
+            lastFilteredCount: this.lastTotalFilteredCount,
+            lastSimplifiedCount: this.lastSimplifiedCount,
+            groups: this.groups
+        };
+    }
+    
+    /**
+     * 设置总开关状态
+     * @param {boolean} enabled
+     */
+    setMasterEnabled(enabled) {
+        this.masterEnabled = Boolean(enabled);
+        this.saveSettings();
+    }
+    
+    /**
+     * 设置提示词简化功能状态
+     * @param {boolean} enabled
+     */
+    setSimplifyEnabled(enabled) {
+        this.simplifyEnabled = Boolean(enabled);
+        this.saveSettings();
+    }
+    
+    // ====================================================================
+    // 组管理功能
+    // ====================================================================
+    
+    /**
+     * 添加新组
+     * @param {string} name - 组名，可选
+     * @returns {Group} 创建的组对象
+     */
+    addGroup(name = '') {
+        const defaultName = name || `${CONFIG.FILTER.DEFAULT_GROUP_NAME_PREFIX} ${this.groups.length + 1}`;
+        const newGroup = createDefaultGroup(defaultName);
+        this.groups.push(newGroup);
+        this.saveSettings();
+        return newGroup;
+    }
+    
+    /**
+     * 复制组
+     * @param {string} groupId - 要复制的组ID
+     * @returns {Group|null} 复制的组对象，如果失败返回null
+     */
+    duplicateGroup(groupId) {
+        const sourceGroup = this.groups.find(g => g.id === groupId);
+        if (!sourceGroup) return null;
+        
+        const duplicatedGroup = {
+            ...sourceGroup,
+            id: generateUUID(),
+            name: `${sourceGroup.name}(副本)`,
+            meta: {
+                lastMatchCount: 0
+            }
+        };
+        
+        // 插入到原组后面
+        const sourceIndex = this.groups.findIndex(g => g.id === groupId);
+        this.groups.splice(sourceIndex + 1, 0, duplicatedGroup);
+        
+        this.saveSettings();
+        return duplicatedGroup;
+    }
+    
+    /**
+     * 删除组
+     * @param {string} groupId - 组ID
+     * @returns {boolean} 删除是否成功
+     */
+    deleteGroup(groupId) {
+        const index = this.groups.findIndex(g => g.id === groupId);
+        if (index === -1) return false;
+        
+        this.groups.splice(index, 1);
+        this.saveSettings();
+        return true;
+    }
+    
+    /**
+     * 更新组信息
+     * @param {string} groupId - 组ID
+     * @param {Partial<Group>} updates - 要更新的字段
+     * @returns {boolean} 更新是否成功
+     */
+    updateGroup(groupId, updates) {
+        const group = this.groups.find(g => g.id === groupId);
+        if (!group) return false;
+        
+        Object.assign(group, updates);
+        this.saveSettings();
+        return true;
+    }
+    
+    /**
+     * 获取组
+     * @param {string} groupId - 组ID
+     * @returns {Group|null}
+     */
+    getGroup(groupId) {
+        return this.groups.find(g => g.id === groupId) || null;
+    }
+    
+    /**
+     * 重新排序组
+     * @param {string[]} groupIds - 新的组ID顺序数组
+     */
+    reorderGroups(groupIds) {
+        const newGroups = [];
+        
+        // 按新顺序重新排列
+        for (const id of groupIds) {
+            const group = this.groups.find(g => g.id === id);
+            if (group) {
+                newGroups.push(group);
+            }
+        }
+        
+        // 添加任何遗漏的组
+        for (const group of this.groups) {
+            if (!newGroups.find(g => g.id === group.id)) {
+                newGroups.push(group);
+            }
+        }
+        
+        this.groups = newGroups;
+        this.saveSettings();
+    }
+    
+    /**
+     * 清零组的命中计数
+     * @param {string} groupId - 组ID，不传则清零所有组
+     */
+    clearMatchCounts(groupId = null) {
+        if (groupId) {
+            const group = this.getGroup(groupId);
+            if (group) {
+                group.meta.lastMatchCount = 0;
+            }
+        } else {
+            this.groups.forEach(group => {
+                group.meta.lastMatchCount = 0;
+            });
+        }
+        this.saveSettings();
+    }
+    
+    // ====================================================================
+    // 核心过滤算法
+    // ====================================================================
+    
+    /**
+     * 应用分组过滤器
+     * @param {string[]} tags - 输入标签数组
+     * @returns {string[]} 过滤后的标签数组
+     */
+    applyFilter(tags) {
+        if (!this.masterEnabled) {
+            return tags;
+        }
+        
+        let currentTags = [...tags];
+        let totalFilteredCount = 0;
+        
+        // 第一阶段：分组过滤
+        for (const group of this.groups) {
+            if (!group.enabled || group.keywords.length === 0) {
+                group.meta.lastMatchCount = 0;
+                continue;
+            }
+            
+            const result = this._applyGroupFilter(currentTags, group);
+            currentTags = result.filteredTags;
+            group.meta.lastMatchCount = result.matchCount;
+            totalFilteredCount += result.matchCount;
+        }
+        
+        this.lastTotalFilteredCount = totalFilteredCount;
+        
+        // 第二阶段：提示词简化
+        if (this.simplifyEnabled) {
+            const simplifiedTags = this._simplifyTags(currentTags);
+            this.lastSimplifiedCount = currentTags.length - simplifiedTags.length;
+            currentTags = simplifiedTags;
+        } else {
+            this.lastSimplifiedCount = 0;
+        }
+        
+        return currentTags;
+    }
+    
+    /**
+     * 应用单个组的过滤规则
+     * @param {string[]} tags - 输入标签
+     * @param {Group} group - 组配置
+     * @returns {{filteredTags: string[], matchCount: number}}
+     */
+    _applyGroupFilter(tags, group) {
+        const patterns = this._compileGroupPatterns(group.keywords);
+        const matchedIndices = new Set();
+        
+        // 查找所有匹配的标签索引
+        tags.forEach((tag, index) => {
+            for (const pattern of patterns) {
+                try {
+                    if (pattern.test(tag)) {
+                        matchedIndices.add(index);
+                        break; // 一个组内任意关键词匹配即可
+                    }
+                } catch (error) {
+                    // 正则表达式执行错误，尝试字符串匹配
+                    if (tag.includes(pattern.source || pattern)) {
+                        matchedIndices.add(index);
+                        break;
+                    }
+                }
+            }
+        });
+        
+        if (matchedIndices.size === 0) {
+            return { filteredTags: tags, matchCount: 0 };
+        }
+        
+        // 删除匹配的标签
+        let filteredTags = tags.filter((_, index) => !matchedIndices.has(index));
+        
+        // 处理替换短语
+        if (group.replacement && this._isValidReplacement(group.replacement)) {
+            const replacementTokens = this._parseReplacementString(group.replacement);
+            if (replacementTokens.length > 0) {
+                // 插入到首次命中的位置
+                const insertPosition = Math.min(...matchedIndices);
+                filteredTags.splice(insertPosition, 0, ...replacementTokens);
+            }
+        }
+        
+        // 全局去重（保留靠前）
+        filteredTags = this._dedupeKeepFirst(filteredTags);
+        
+        return { 
+            filteredTags, 
+            matchCount: matchedIndices.size 
+        };
+    }
+    
+    /**
+     * 编译组关键词为正则表达式模式
+     * @param {string[]} keywords - 关键词数组
+     * @returns {RegExp[]} 编译后的正则表达式数组
+     */
+    _compileGroupPatterns(keywords) {
+        const patterns = [];
+        
+        for (const keyword of keywords) {
+            if (!keyword.trim()) continue;
+            
+            try {
+                // 尝试作为正则表达式编译
+                const pattern = new RegExp(keyword, 'i');
+                pattern.test(''); // 测试是否有效
+                patterns.push(pattern);
+            } catch (error) {
+                // 无效正则，转为普通字符串匹配（完全匹配）
+                const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                patterns.push(new RegExp(`^${escapedKeyword}$`, 'i'));
+            }
+        }
+        
+        return patterns;
+    }
+    
+    /**
+     * 验证替换短语格式
+     * @param {string} replacement - 替换短语
+     * @returns {boolean}
+     */
+    _isValidReplacement(replacement) {
+        if (!replacement.trim()) return true; // 空字符串有效（仅删除）
+        
+        // 检查是否包含逗号但格式不正确
+        if (replacement.includes(',') && !replacement.includes(', ')) {
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * 解析替换短语字符串
+     * @param {string} replacement - 替换短语
+     * @returns {string[]} 替换标签数组
+     */
+    _parseReplacementString(replacement) {
+        if (!replacement.trim()) return [];
+        
+        return replacement
+            .split(', ')
+            .map(token => token.trim())
+            .filter(token => token.length > 0);
+    }
+    
+    /**
+     * 数组去重（保留靠前）
+     * @param {string[]} array - 输入数组
+     * @returns {string[]} 去重后的数组
+     */
+    _dedupeKeepFirst(array) {
+        const seen = new Set();
+        return array.filter(item => {
+            if (seen.has(item)) {
+                return false;
+            }
+            seen.add(item);
+            return true;
+        });
+    }
+    
+    /**
+     * 提示词简化算法
+     * @param {string[]} tags - 输入标签数组
+     * @returns {string[]} 简化后的标签数组
+     */
+    _simplifyTags(tags) {
+        if (!tags || tags.length <= 1) return tags;
+        
+        const indexedTags = tags.map((tag, index) => ({ tag, originalIndex: index }));
+        const result = [];
+        
+        for (let i = 0; i < indexedTags.length; i++) {
+            const currentItem = indexedTags[i];
+            let isContained = false;
+            
+            // 检查当前标签是否被其他标签完全包含
+            for (let j = 0; j < indexedTags.length; j++) {
+                if (i === j) continue;
+                
+                const otherItem = indexedTags[j];
+                if (otherItem.tag.includes(currentItem.tag) && otherItem.tag !== currentItem.tag) {
+                    isContained = true;
+                    break;
+                }
+            }
+            
+            if (!isContained) {
+                result.push(currentItem);
+            }
+        }
+        
+        // 按原始顺序排序并返回标签
+        return result
+            .sort((a, b) => a.originalIndex - b.originalIndex)
+            .map(item => item.tag);
+    }
+    
+    // ====================================================================
+    // 导入导出功能
+    // ====================================================================
+    
+    /**
+     * 导出配置
+     * @returns {string} JSON配置字符串
+     */
+    exportConfig() {
+        const config = {
+            masterEnabled: this.masterEnabled,
+            simplifyEnabled: this.simplifyEnabled,
+            groups: this.groups,
+            schemaVersion: CONFIG.FILTER.SCHEMA_VERSION,
+            exportedAt: new Date().toISOString()
+        };
+        
+        return JSON.stringify(config, null, 2);
+    }
+    
+    /**
+     * 验证导入的配置
+     * @param {Object} config - 配置对象
+     * @returns {{valid: boolean, error?: string, migratedConfig?: Object}}
+     */
+    validateImportConfig(config) {
+        if (!config || typeof config !== 'object') {
+            return { valid: false, error: '配置格式无效' };
+        }
+        
+        // 检查必需字段
+        if (typeof config.masterEnabled !== 'boolean') {
+            return { valid: false, error: '缺少 masterEnabled 字段' };
+        }
+        
+        if (!Array.isArray(config.groups)) {
+            return { valid: false, error: '缺少 groups 字段或格式错误' };
+        }
+        
+        // 验证组数据结构
+        for (let i = 0; i < config.groups.length; i++) {
+            const group = config.groups[i];
+            if (!group.id || typeof group.name !== 'string' || !Array.isArray(group.keywords)) {
+                return { valid: false, error: `组 ${i + 1} 数据结构无效` };
+            }
+        }
+        
+        // 字段迁移（如果需要）
+        const migratedConfig = this._migrateConfigSchema(config);
+        
+        return { valid: true, migratedConfig };
+    }
+    
+    /**
+     * 导入配置
+     * @param {string} configJson - JSON配置字符串
+     * @param {boolean} append - 是否追加模式，否则覆盖
+     * @returns {{success: boolean, error?: string, importedGroups?: number}}
+     */
+    importConfig(configJson, append = false) {
+        try {
+            const config = JSON.parse(configJson);
+            const validation = this.validateImportConfig(config);
+            
+            if (!validation.valid) {
+                return { success: false, error: validation.error };
+            }
+            
+            const importConfig = validation.migratedConfig;
+            
+            if (append) {
+                // 追加模式：添加新组，但不改变总开关状态
+                const newGroups = importConfig.groups.map(group => ({
+                    ...group,
+                    id: generateUUID(), // 重新生成ID避免冲突
+                    meta: {
+                        lastMatchCount: 0
+                    }
+                }));
+                
+                this.groups.push(...newGroups);
+                
+                return { 
+                    success: true, 
+                    importedGroups: newGroups.length 
+                };
+            } else {
+                // 覆盖模式：完全替换配置
+                this.masterEnabled = importConfig.masterEnabled;
+                this.simplifyEnabled = importConfig.simplifyEnabled ?? this.simplifyEnabled;
+                this.groups = importConfig.groups.map(group => ({
+                    ...group,
+                    meta: {
+                        lastMatchCount: 0,
+                        ...group.meta
+                    }
+                }));
+                
+                return { 
+                    success: true, 
+                    importedGroups: this.groups.length 
+                };
+            }
+        } catch (error) {
+            return { 
+                success: false, 
+                error: `JSON解析失败: ${error.message}` 
+            };
+        } finally {
+            this.saveSettings();
+        }
+    }
+    
+    /**
+     * 配置版本迁移
+     * @param {Object} config - 配置对象
+     * @returns {Object} 迁移后的配置
+     */
+    _migrateConfigSchema(config) {
+        const migrated = { ...config };
+        
+        // 确保所有组都有完整的字段
+        migrated.groups = config.groups.map(group => ({
+            id: group.id || generateUUID(),
+            name: group.name || '未命名组',
+            enabled: group.enabled ?? true,
+            collapsed: group.collapsed ?? true,
+            keywords: group.keywords || [],
+            replacement: group.replacement || '',
+            meta: {
+                lastMatchCount: 0,
+                ...group.meta
+            }
+        }));
+        
+        // 确保有简化开关字段
+        if (typeof migrated.simplifyEnabled !== 'boolean') {
+            migrated.simplifyEnabled = CONFIG.FILTER.DEFAULT_SIMPLIFY_ENABLED;
+        }
+        
+        return migrated;
+    }
+    
+    /**
+     * 获取导入预览信息
+     * @param {string} configJson - JSON配置字符串
+     * @returns {{valid: boolean, preview?: Object, error?: string}}
+     */
+    getImportPreview(configJson) {
+        try {
+            const config = JSON.parse(configJson);
+            const validation = this.validateImportConfig(config);
+            
+            if (!validation.valid) {
+                return { valid: false, error: validation.error };
+            }
+            
+            const importConfig = validation.migratedConfig;
+            const groupNames = importConfig.groups.map(g => g.name);
+            const totalKeywords = importConfig.groups.reduce((sum, g) => sum + g.keywords.length, 0);
+            
+            return {
+                valid: true,
+                preview: {
+                    masterEnabled: importConfig.masterEnabled,
+                    simplifyEnabled: importConfig.simplifyEnabled,
+                    groupCount: importConfig.groups.length,
+                    groupNames,
+                    totalKeywords,
+                    schemaVersion: importConfig.schemaVersion,
+                    exportedAt: importConfig.exportedAt
+                }
+            };
+        } catch (error) {
+            return { 
+                valid: false, 
+                error: `JSON解析失败: ${error.message}` 
+            };
+        }
+    }
+}
+
+/**
+ * FilterManager - 自定义过滤器管理类 (旧版本兼容)
  * 
  * 功能说明：
  * - 管理用户自定义的过滤关键词列表
@@ -517,7 +1271,7 @@ class TagConverter {
         this.formatDetector = new FormatDetector();
         this.contentExtractor = new ContentExtractor();
         this.contentCleaner = new ContentCleaner();
-        this.filterManager = new FilterManager();
+        this.filterManager = new GroupedFilterManager();
         this.uiManager = new UIManager();
     }
     
@@ -1332,10 +2086,11 @@ function clearAll() {
  */
 function toggleFilter() {
     const enabled = document.getElementById('filter-enabled').checked;
-    tagConverter.filterManager.setEnabled(enabled);
+    tagConverter.filterManager.setMasterEnabled(enabled);
     
-    // 更新简化开关的启用状态
+    // 更新UI状态和简化开关的启用状态
     tagConverter.uiManager.updateSimplifyToggleState(enabled);
+    tagConverter.uiManager.updateFilterStatus(tagConverter.filterManager.getStatus());
     
     // 重新转换当前内容
     convert();
@@ -1357,7 +2112,7 @@ function toggleFilter() {
  */
 function toggleSimplify() {
     // 检查主过滤器是否启用，如果未启用则不允许切换
-    if (!tagConverter.filterManager.enabled) {
+    if (!tagConverter.filterManager.masterEnabled) {
         // 强制保持关闭状态
         document.getElementById('simplify-enabled').checked = false;
         return;
@@ -1463,5 +2218,898 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    console.log('Tag格式转换器已初始化 - 支持Danbooru/Gelbooru/Standard格式 + 自定义过滤');
+    // 初始化分组过滤器UI
+    initializeGroupedFilterUI();
+    
+    console.log('Tag格式转换器已初始化 - 支持分组过滤器版本');
+});
+
+// ====================================================================
+// 分组过滤器UI交互函数
+// ====================================================================
+
+/**
+ * 初始化分组过滤器UI
+ */
+function initializeGroupedFilterUI() {
+    const filterManager = tagConverter.filterManager;
+    const status = filterManager.getStatus();
+    
+    // 设置总开关状态
+    const filterEnabled = document.getElementById('filter-enabled');
+    if (filterEnabled) {
+        filterEnabled.checked = status.enabled;
+    }
+    
+    // 设置简化开关状态
+    const simplifyEnabled = document.getElementById('simplify-enabled');
+    if (simplifyEnabled) {
+        simplifyEnabled.checked = status.simplifyEnabled;
+    }
+    
+    // 渲染所有组
+    renderAllGroups();
+    
+    // 更新统计信息
+    updateFilterStats();
+    
+    // 更新空状态显示
+    updateEmptyState();
+}
+
+/**
+ * 渲染所有组
+ */
+function renderAllGroups() {
+    const groupsContainer = document.getElementById('filter-groups');
+    if (!groupsContainer) return;
+    
+    groupsContainer.innerHTML = '';
+    
+    const groups = tagConverter.filterManager.groups;
+    groups.forEach(group => {
+        const groupElement = createGroupElement(group);
+        groupsContainer.appendChild(groupElement);
+    });
+    
+    // 重新初始化拖拽功能
+    addDragListeners();
+}
+
+/**
+ * 创建组DOM元素
+ * @param {Group} group - 组数据
+ * @returns {HTMLElement}
+ */
+function createGroupElement(group) {
+    const template = document.getElementById('group-card-template');
+    if (!template) {
+        console.error('Group template not found');
+        return document.createElement('div');
+    }
+    
+    const groupElement = template.content.cloneNode(true).firstElementChild;
+    groupElement.setAttribute('data-group-id', group.id);
+    
+    // 设置组名
+    const nameInput = groupElement.querySelector('.group-name');
+    if (nameInput) {
+        nameInput.value = group.name;
+    }
+    
+    // 设置启用状态
+    const enabledCheckbox = groupElement.querySelector('.group-enabled');
+    if (enabledCheckbox) {
+        enabledCheckbox.checked = group.enabled;
+    }
+    
+    // 设置命中徽标
+    const matchBadge = groupElement.querySelector('.group-match-badge');
+    if (matchBadge) {
+        const count = group.meta?.lastMatchCount ?? 0;
+        if (tagConverter.filterManager.masterEnabled && count > 0) {
+            matchBadge.textContent = `•${count}`;
+            matchBadge.classList.add('has-matches');
+        } else {
+            matchBadge.textContent = tagConverter.filterManager.masterEnabled ? '•0' : '—';
+            matchBadge.classList.remove('has-matches');
+        }
+    }
+    
+    // 设置折叠状态
+    const expandBtn = groupElement.querySelector('.expand-group-btn');
+    const groupContent = groupElement.querySelector('.group-content');
+    if (expandBtn && groupContent) {
+        if (group.collapsed) {
+            expandBtn.setAttribute('aria-expanded', 'false');
+            groupContent.style.display = 'none';
+        } else {
+            expandBtn.setAttribute('aria-expanded', 'true');
+            groupContent.style.display = 'block';
+        }
+    }
+    
+    // 渲染关键词标签
+    renderGroupKeywords(groupElement, group);
+    
+    // 设置替换短语
+    const replacementInput = groupElement.querySelector('.replacement-input');
+    if (replacementInput) {
+        replacementInput.value = group.replacement;
+        validateReplacementInput(replacementInput);
+    }
+    
+    return groupElement;
+}
+
+/**
+ * 渲染组的关键词标签
+ * @param {HTMLElement} groupElement - 组DOM元素
+ * @param {Group} group - 组数据
+ */
+function renderGroupKeywords(groupElement, group) {
+    const keywordsContainer = groupElement.querySelector('.keywords-tags');
+    if (!keywordsContainer) return;
+    
+    keywordsContainer.innerHTML = '';
+    
+    group.keywords.forEach((keyword, index) => {
+        const tag = document.createElement('span');
+        tag.className = 'keyword-tag';
+        tag.innerHTML = `
+            ${keyword}
+            <button class="remove-tag" onclick="removeKeywordFromGroup('${group.id}', ${index})" title="删除关键词">×</button>
+        `;
+        keywordsContainer.appendChild(tag);
+    });
+}
+
+/**
+ * 更新过滤器统计信息
+ */
+function updateFilterStats() {
+    const status = tagConverter.filterManager.getStatus();
+    
+    const filterCount = document.getElementById('filter-count');
+    if (filterCount) {
+        filterCount.textContent = status.keywordCount;
+    }
+    
+    const filteredCount = document.getElementById('filtered-count');
+    if (filteredCount) {
+        filteredCount.textContent = status.lastFilteredCount;
+    }
+    
+    const simplifiedCount = document.getElementById('simplified-count');
+    if (simplifiedCount) {
+        simplifiedCount.textContent = status.lastSimplifiedCount;
+    }
+}
+
+/**
+ * 更新空状态显示
+ */
+function updateEmptyState() {
+    const emptyState = document.getElementById('empty-state');
+    const groupsContainer = document.getElementById('filter-groups');
+    
+    if (emptyState && groupsContainer) {
+        if (tagConverter.filterManager.groups.length === 0) {
+            emptyState.style.display = 'block';
+            groupsContainer.style.display = 'none';
+        } else {
+            emptyState.style.display = 'none';
+            groupsContainer.style.display = 'block';
+        }
+    }
+}
+
+/**
+ * 添加新组
+ */
+function addGroup() {
+    const newGroup = tagConverter.filterManager.addGroup();
+    renderAllGroups();
+    updateFilterStats();
+    updateEmptyState();
+    
+    // 自动展开新创建的组
+    setTimeout(() => {
+        const groupElement = document.querySelector(`[data-group-id="${newGroup.id}"]`);
+        if (groupElement) {
+            const expandBtn = groupElement.querySelector('.expand-group-btn');
+            if (expandBtn) {
+                toggleGroupExpand(expandBtn);
+            }
+            
+            // 聚焦到组名输入框
+            const nameInput = groupElement.querySelector('.group-name');
+            if (nameInput) {
+                nameInput.focus();
+                nameInput.select();
+            }
+        }
+    }, 100);
+}
+
+/**
+ * 切换组启用状态
+ * @param {HTMLInputElement} checkbox - 复选框元素
+ */
+function toggleGroup(checkbox) {
+    const groupElement = checkbox.closest('.group-card');
+    const groupId = groupElement?.getAttribute('data-group-id');
+    
+    if (groupId) {
+        tagConverter.filterManager.updateGroup(groupId, { 
+            enabled: checkbox.checked 
+        });
+        
+        // 重新转换
+        convert();
+        updateFilterStats();
+    }
+}
+
+/**
+ * 更新组名
+ * @param {HTMLInputElement} input - 输入框元素
+ */
+function updateGroupName(input) {
+    const groupElement = input.closest('.group-card');
+    const groupId = groupElement?.getAttribute('data-group-id');
+    
+    if (groupId) {
+        tagConverter.filterManager.updateGroup(groupId, { 
+            name: input.value || '未命名组'
+        });
+    }
+}
+
+/**
+ * 保存组名（失焦时调用）
+ * @param {HTMLInputElement} input - 输入框元素
+ */
+function saveGroupName(input) {
+    updateGroupName(input);
+}
+
+/**
+ * 切换组展开/折叠状态
+ * @param {HTMLElement} button - 按钮元素
+ */
+function toggleGroupExpand(button) {
+    const groupElement = button.closest('.group-card');
+    const groupId = groupElement?.getAttribute('data-group-id');
+    const groupContent = groupElement?.querySelector('.group-content');
+    
+    if (!groupElement || !groupId || !groupContent) return;
+    
+    const isExpanded = button.getAttribute('aria-expanded') === 'true';
+    const newExpanded = !isExpanded;
+    
+    button.setAttribute('aria-expanded', newExpanded);
+    groupContent.style.display = newExpanded ? 'block' : 'none';
+    
+    // 更新数据
+    tagConverter.filterManager.updateGroup(groupId, { 
+        collapsed: !newExpanded 
+    });
+    
+    // 如果展开，聚焦到关键词输入框
+    if (newExpanded) {
+        setTimeout(() => {
+            const keywordInput = groupContent.querySelector('.keyword-input');
+            if (keywordInput) {
+                keywordInput.focus();
+            }
+        }, 100);
+    }
+}
+
+/**
+ * 切换组菜单显示
+ * @param {HTMLElement} button - 菜单按钮
+ */
+function toggleGroupMenu(button) {
+    const dropdown = button.nextElementSibling;
+    if (dropdown) {
+        const isVisible = dropdown.style.display !== 'none';
+        
+        // 关闭其他菜单
+        document.querySelectorAll('.menu-dropdown').forEach(menu => {
+            menu.style.display = 'none';
+        });
+        
+        // 切换当前菜单
+        dropdown.style.display = isVisible ? 'none' : 'block';
+        
+        // 点击外部关闭菜单
+        if (!isVisible) {
+            setTimeout(() => {
+                const closeMenu = (e) => {
+                    if (!button.contains(e.target) && !dropdown.contains(e.target)) {
+                        dropdown.style.display = 'none';
+                        document.removeEventListener('click', closeMenu);
+                    }
+                };
+                document.addEventListener('click', closeMenu);
+            }, 0);
+        }
+    }
+}
+
+/**
+ * 复制组
+ * @param {HTMLElement} menuItem - 菜单项元素
+ */
+function duplicateGroup(menuItem) {
+    const groupElement = menuItem.closest('.group-card');
+    const groupId = groupElement?.getAttribute('data-group-id');
+    
+    if (groupId) {
+        tagConverter.filterManager.duplicateGroup(groupId);
+        renderAllGroups();
+        updateFilterStats();
+        updateEmptyState();
+    }
+    
+    // 关闭菜单
+    const dropdown = menuItem.closest('.menu-dropdown');
+    if (dropdown) {
+        dropdown.style.display = 'none';
+    }
+}
+
+/**
+ * 清零组命中计数
+ * @param {HTMLElement} menuItem - 菜单项元素
+ */
+function clearGroupMatchCount(menuItem) {
+    const groupElement = menuItem.closest('.group-card');
+    const groupId = groupElement?.getAttribute('data-group-id');
+    
+    if (groupId) {
+        tagConverter.filterManager.clearMatchCounts(groupId);
+        
+        // 更新徽标显示
+        const matchBadge = groupElement.querySelector('.group-match-badge');
+        if (matchBadge) {
+            matchBadge.textContent = tagConverter.filterManager.masterEnabled ? '•0' : '—';
+            matchBadge.classList.remove('has-matches');
+        }
+    }
+    
+    // 关闭菜单
+    const dropdown = menuItem.closest('.menu-dropdown');
+    if (dropdown) {
+        dropdown.style.display = 'none';
+    }
+}
+
+/**
+ * 删除组
+ * @param {HTMLElement} menuItem - 菜单项元素
+ */
+function deleteGroup(menuItem) {
+    const groupElement = menuItem.closest('.group-card');
+    const groupId = groupElement?.getAttribute('data-group-id');
+    const group = tagConverter.filterManager.getGroup(groupId);
+    
+    if (groupId && group) {
+        // 确认删除
+        const confirmed = confirm(`确定要删除组"${group.name}"吗？此操作不可恢复。`);
+        if (confirmed) {
+            tagConverter.filterManager.deleteGroup(groupId);
+            renderAllGroups();
+            updateFilterStats();
+            updateEmptyState();
+            
+            // 重新转换
+            convert();
+        }
+    }
+    
+    // 关闭菜单
+    const dropdown = menuItem.closest('.menu-dropdown');
+    if (dropdown) {
+        dropdown.style.display = 'none';
+    }
+}
+
+/**
+ * 处理关键词输入
+ * @param {KeyboardEvent} event - 键盘事件
+ */
+function handleKeywordInput(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        addKeywordFromInput(event.target);
+    } else if (event.key === 'Backspace' && event.target.value === '') {
+        // 删除最后一个关键词
+        const groupElement = event.target.closest('.group-card');
+        const groupId = groupElement?.getAttribute('data-group-id');
+        const group = tagConverter.filterManager.getGroup(groupId);
+        
+        if (group && group.keywords.length > 0) {
+            group.keywords.pop();
+            tagConverter.filterManager.updateGroup(groupId, { keywords: group.keywords });
+            renderGroupKeywords(groupElement, group);
+            convert();
+        }
+    }
+}
+
+/**
+ * 从输入框添加关键词
+ * @param {HTMLInputElement} input - 输入框
+ */
+function addKeywordFromInput(input) {
+    const value = input.value.trim();
+    if (!value) return;
+    
+    const groupElement = input.closest('.group-card');
+    const groupId = groupElement?.getAttribute('data-group-id');
+    const group = tagConverter.filterManager.getGroup(groupId);
+    
+    if (group) {
+        // 支持批量添加（逗号分隔）
+        const newKeywords = value.split(',').map(k => k.trim()).filter(k => k.length > 0);
+        
+        for (const keyword of newKeywords) {
+            if (!group.keywords.includes(keyword)) {
+                group.keywords.push(keyword);
+            }
+        }
+        
+        tagConverter.filterManager.updateGroup(groupId, { keywords: group.keywords });
+        renderGroupKeywords(groupElement, group);
+        
+        input.value = '';
+        convert();
+        updateFilterStats();
+    }
+}
+
+/**
+ * 聚焦关键词输入框
+ * @param {HTMLElement} container - 关键词容器
+ */
+function focusKeywordInput(container) {
+    const input = container.parentElement?.querySelector('.keyword-input');
+    if (input) {
+        input.focus();
+    }
+}
+
+/**
+ * 从组中删除关键词
+ * @param {string} groupId - 组ID
+ * @param {number} index - 关键词索引
+ */
+function removeKeywordFromGroup(groupId, index) {
+    const group = tagConverter.filterManager.getGroup(groupId);
+    if (group) {
+        group.keywords.splice(index, 1);
+        tagConverter.filterManager.updateGroup(groupId, { keywords: group.keywords });
+        
+        const groupElement = document.querySelector(`[data-group-id="${groupId}"]`);
+        if (groupElement) {
+            renderGroupKeywords(groupElement, group);
+        }
+        
+        convert();
+        updateFilterStats();
+    }
+}
+
+/**
+ * 更新替换短语
+ * @param {HTMLInputElement} input - 输入框元素
+ */
+function updateReplacement(input) {
+    const groupElement = input.closest('.group-card');
+    const groupId = groupElement?.getAttribute('data-group-id');
+    
+    if (groupId) {
+        tagConverter.filterManager.updateGroup(groupId, { 
+            replacement: input.value 
+        });
+        
+        // 重新转换
+        convert();
+        updateFilterStats();
+    }
+}
+
+/**
+ * 验证替换短语输入
+ * @param {HTMLInputElement} input - 输入框元素
+ */
+function validateReplacement(input) {
+    validateReplacementInput(input);
+}
+
+/**
+ * 验证替换短语输入格式
+ * @param {HTMLInputElement} input - 输入框元素
+ */
+function validateReplacementInput(input) {
+    const errorDiv = input.parentElement?.querySelector('.replacement-error');
+    if (!errorDiv) return;
+    
+    const value = input.value;
+    const isValid = tagConverter.filterManager._isValidReplacement(value);
+    
+    if (!isValid) {
+        input.classList.add('error');
+        errorDiv.style.display = 'block';
+    } else {
+        input.classList.remove('error');
+        errorDiv.style.display = 'none';
+    }
+}
+
+/**
+ * 导出配置
+ */
+function exportConfig() {
+    try {
+        const config = tagConverter.filterManager.exportConfig();
+        
+        // 创建下载链接
+        const blob = new Blob([config], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `tag-filter-config-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        URL.revokeObjectURL(url);
+        
+        // 简单的成功提示
+        const exportBtn = document.getElementById('export-btn');
+        if (exportBtn) {
+            const originalText = exportBtn.textContent;
+            exportBtn.textContent = '✓';
+            exportBtn.style.background = CONFIG.UI.COPY_SUCCESS_COLOR;
+            setTimeout(() => {
+                exportBtn.textContent = originalText;
+                exportBtn.style.background = '';
+            }, 1500);
+        }
+    } catch (error) {
+        console.error('导出失败:', error);
+        alert('导出失败：' + error.message);
+    }
+}
+
+/**
+ * 导入配置
+ */
+function importConfig() {
+    const fileInput = document.getElementById('import-file');
+    if (fileInput) {
+        fileInput.click();
+    }
+}
+
+/**
+ * 处理导入文件
+ * @param {Event} event - 文件输入事件
+ */
+function handleImportFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const configJson = e.target?.result;
+            if (typeof configJson !== 'string') return;
+            
+            // 显示预览和确认对话框
+            showImportPreview(configJson);
+        } catch (error) {
+            console.error('文件读取失败:', error);
+            alert('文件读取失败：' + error.message);
+        }
+    };
+    
+    reader.readAsText(file);
+    
+    // 重置文件输入
+    event.target.value = '';
+}
+
+/**
+ * 显示导入预览
+ * @param {string} configJson - 配置JSON字符串
+ */
+function showImportPreview(configJson) {
+    const preview = tagConverter.filterManager.getImportPreview(configJson);
+    
+    if (!preview.valid) {
+        alert('配置文件无效：' + preview.error);
+        return;
+    }
+    
+    const { preview: previewData } = preview;
+    const message = `即将导入配置：
+    
+• 总开关：${previewData.masterEnabled ? '启用' : '禁用'}
+• 简化功能：${previewData.simplifyEnabled ? '启用' : '禁用'}  
+• 组数量：${previewData.groupCount} 个
+• 总关键词：${previewData.totalKeywords} 个
+• 组名：${previewData.groupNames.join(', ')}
+
+导入方式：
+[确定] = 覆盖现有配置
+[取消] = 取消导入
+
+是否继续？`;
+    
+    const confirmed = confirm(message);
+    if (confirmed) {
+        // 覆盖模式导入
+        const result = tagConverter.filterManager.importConfig(configJson, false);
+        
+        if (result.success) {
+            // 重新渲染UI
+            initializeGroupedFilterUI();
+            convert();
+            alert(`导入成功！已导入 ${result.importedGroups} 个组`);
+        } else {
+            alert('导入失败：' + result.error);
+        }
+    }
+}
+
+// ====================================================================
+// 拖拽排序功能
+// ====================================================================
+
+/**
+ * 初始化拖拽排序
+ */
+function initializeDragAndDrop() {
+    const groupsContainer = document.getElementById('filter-groups');
+    if (!groupsContainer) return;
+    
+    // 为每个组添加拖拽事件
+    addDragListeners();
+}
+
+/**
+ * 为组卡片添加拖拽监听器
+ */
+function addDragListeners() {
+    const groupCards = document.querySelectorAll('.group-card');
+    
+    groupCards.forEach(card => {
+        const dragHandle = card.querySelector('.drag-handle');
+        if (!dragHandle) return;
+        
+        // 添加拖拽事件
+        dragHandle.addEventListener('mousedown', handleDragStart);
+        dragHandle.addEventListener('touchstart', handleDragStart, { passive: false });
+    });
+}
+
+/**
+ * 处理拖拽开始
+ * @param {MouseEvent|TouchEvent} event - 事件对象
+ */
+function handleDragStart(event) {
+    event.preventDefault();
+    
+    const groupCard = event.target.closest('.group-card');
+    if (!groupCard) return;
+    
+    const groupsContainer = document.getElementById('filter-groups');
+    if (!groupsContainer) return;
+    
+    const isTouch = event.type === 'touchstart';
+    
+    // 创建拖拽状态
+    const dragState = {
+        draggedCard: groupCard,
+        container: groupsContainer,
+        startY: isTouch ? event.touches[0].clientY : event.clientY,
+        initialIndex: Array.from(groupsContainer.children).indexOf(groupCard),
+        isTouch
+    };
+    
+    // 添加拖拽样式
+    groupCard.classList.add('dragging');
+    
+    // 创建占位符
+    const placeholder = createDragPlaceholder(groupCard);
+    groupCard.parentNode.insertBefore(placeholder, groupCard.nextSibling);
+    
+    dragState.placeholder = placeholder;
+    
+    // 添加移动和结束事件监听器
+    const moveEvent = isTouch ? 'touchmove' : 'mousemove';
+    const endEvent = isTouch ? 'touchend' : 'mouseup';
+    
+    const handleMove = (e) => handleDragMove(e, dragState);
+    const handleEnd = (e) => handleDragEnd(e, dragState);
+    
+    document.addEventListener(moveEvent, handleMove, { passive: false });
+    document.addEventListener(endEvent, handleEnd, { once: true });
+    
+    // 存储清理函数
+    dragState.cleanup = () => {
+        document.removeEventListener(moveEvent, handleMove);
+        document.removeEventListener(endEvent, handleEnd);
+    };
+}
+
+/**
+ * 创建拖拽占位符
+ * @param {HTMLElement} originalCard - 原始卡片
+ * @returns {HTMLElement} 占位符元素
+ */
+function createDragPlaceholder(originalCard) {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'group-card-placeholder';
+    placeholder.style.cssText = `
+        height: ${originalCard.offsetHeight}px;
+        background: #f0f8ff;
+        border: 2px dashed #007AFF;
+        border-radius: 10px;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #007AFF;
+        font-size: 14px;
+        opacity: 0.8;
+    `;
+    placeholder.textContent = '放置到这里';
+    return placeholder;
+}
+
+/**
+ * 处理拖拽移动
+ * @param {MouseEvent|TouchEvent} event - 事件对象
+ * @param {Object} dragState - 拖拽状态
+ */
+function handleDragMove(event, dragState) {
+    event.preventDefault();
+    
+    const { draggedCard, container, placeholder, isTouch } = dragState;
+    
+    const currentY = isTouch ? event.touches[0].clientY : event.clientY;
+    
+    // 找到鼠标/触摸位置应该插入的位置
+    const afterElement = getDragAfterElement(container, currentY);
+    
+    if (afterElement == null) {
+        container.appendChild(placeholder);
+    } else {
+        container.insertBefore(placeholder, afterElement);
+    }
+}
+
+/**
+ * 获取拖拽后应该插入的元素
+ * @param {HTMLElement} container - 容器元素
+ * @param {number} y - Y坐标
+ * @returns {HTMLElement|null}
+ */
+function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.group-card:not(.dragging)')];
+    
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+        } else {
+            return closest;
+        }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+/**
+ * 处理拖拽结束
+ * @param {MouseEvent|TouchEvent} event - 事件对象
+ * @param {Object} dragState - 拖拽状态
+ */
+function handleDragEnd(event, dragState) {
+    const { draggedCard, container, placeholder, initialIndex, cleanup } = dragState;
+    
+    // 清理事件监听器
+    cleanup();
+    
+    // 移除拖拽样式
+    draggedCard.classList.remove('dragging');
+    
+    // 将拖拽的卡片放到占位符位置
+    container.insertBefore(draggedCard, placeholder);
+    container.removeChild(placeholder);
+    
+    // 获取新的索引
+    const newIndex = Array.from(container.children).indexOf(draggedCard);
+    
+    // 如果位置发生变化，更新数据
+    if (newIndex !== initialIndex) {
+        updateGroupOrder();
+        
+        // 重新转换以应用新的过滤顺序
+        convert();
+    }
+}
+
+/**
+ * 更新组顺序
+ */
+function updateGroupOrder() {
+    const groupsContainer = document.getElementById('filter-groups');
+    if (!groupsContainer) return;
+    
+    const groupCards = Array.from(groupsContainer.querySelectorAll('.group-card'));
+    const newGroupIds = groupCards.map(card => card.getAttribute('data-group-id')).filter(Boolean);
+    
+    // 更新过滤器管理器中的顺序
+    tagConverter.filterManager.reorderGroups(newGroupIds);
+    
+    console.log('组顺序已更新:', newGroupIds);
+}
+
+// 键盘辅助功能（可选）
+/**
+ * 处理键盘拖拽
+ * @param {KeyboardEvent} event - 键盘事件
+ */
+function handleKeyboardDrag(event) {
+    if (event.target.classList.contains('drag-handle')) {
+        const groupCard = event.target.closest('.group-card');
+        if (!groupCard) return;
+        
+        const groupsContainer = document.getElementById('filter-groups');
+        const cards = Array.from(groupsContainer.querySelectorAll('.group-card'));
+        const currentIndex = cards.indexOf(groupCard);
+        
+        if (event.key === 'ArrowUp' && currentIndex > 0) {
+            // 向上移动
+            event.preventDefault();
+            const prevCard = cards[currentIndex - 1];
+            groupsContainer.insertBefore(groupCard, prevCard);
+            updateGroupOrder();
+            convert();
+            
+            // 保持焦点
+            event.target.focus();
+        } else if (event.key === 'ArrowDown' && currentIndex < cards.length - 1) {
+            // 向下移动
+            event.preventDefault();
+            const nextCard = cards[currentIndex + 1];
+            groupsContainer.insertBefore(groupCard, nextCard.nextSibling);
+            updateGroupOrder();
+            convert();
+            
+            // 保持焦点
+            event.target.focus();
+        }
+    }
+}
+
+// 在初始化时添加键盘事件监听
+document.addEventListener('keydown', handleKeyboardDrag);
+
+// 全局点击事件处理（关闭菜单）
+document.addEventListener('click', function(event) {
+    // 如果点击的不是菜单按钮或菜单项，关闭所有菜单
+    if (!event.target.closest('.group-menu')) {
+        document.querySelectorAll('.menu-dropdown').forEach(menu => {
+            menu.style.display = 'none';
+        });
+    }
 });
