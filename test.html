@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分组过滤器功能测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f7;
+        }
+
+        .test-container {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #007AFF;
+            padding-bottom: 10px;
+        }
+
+        .test-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+
+        .test-status {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-pending { background: #f2f2f7; color: #666; }
+        .status-running { background: #e3f2fd; color: #1976d2; }
+        .status-passed { background: #e8f5e8; color: #2e7d32; }
+        .status-failed { background: #ffebee; color: #d32f2f; }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #fafafa;
+            border-radius: 8px;
+            border-left: 4px solid #007AFF;
+        }
+
+        .test-case {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .test-case.running {
+            border-color: #2196F3;
+            background: #e3f2fd;
+        }
+
+        .test-case.passed {
+            border-color: #4CAF50;
+            background: #e8f5e8;
+        }
+
+        .test-case.failed {
+            border-color: #f44336;
+            background: #ffebee;
+        }
+
+        .test-case h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .test-description {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .test-input {
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            margin: 5px 0;
+            white-space: pre-wrap;
+            border: 1px solid #ddd;
+        }
+
+        .test-output {
+            background: #e8f5e8;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            margin: 5px 0;
+            border: 1px solid #4CAF50;
+        }
+
+        .test-error {
+            background: #ffebee;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            margin: 5px 0;
+            border: 1px solid #f44336;
+            color: #d32f2f;
+        }
+
+        .test-controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .test-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .test-btn.primary {
+            background: #007AFF;
+            color: white;
+        }
+
+        .test-btn.secondary {
+            background: #f2f2f7;
+            color: #333;
+        }
+
+        .test-btn.danger {
+            background: #ff3b30;
+            color: white;
+        }
+
+        .test-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-results {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #007AFF, #34C759);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .iframe-container {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .iframe-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .test-data {
+            display: none;
+        }
+
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: 600;
+            color: #007AFF;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <div class="test-header">
+            <h1 class="test-title">🧪 分组过滤器功能测试</h1>
+            <div class="test-status">
+                <span class="status-badge status-pending" id="overall-status">准备中</span>
+            </div>
+        </div>
+
+        <div class="summary-stats" id="summary-stats">
+            <div class="stat-card">
+                <div class="stat-number" id="total-tests">0</div>
+                <div class="stat-label">总测试数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="passed-tests">0</div>
+                <div class="stat-label">通过</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="failed-tests">0</div>
+                <div class="stat-label">失败</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="success-rate">0%</div>
+                <div class="stat-label">成功率</div>
+            </div>
+        </div>
+
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+        </div>
+
+        <div class="test-controls">
+            <button class="test-btn primary" onclick="runAllTests()">🚀 运行所有测试</button>
+            <button class="test-btn secondary" onclick="runBasicTests()">🔍 基础功能测试</button>
+            <button class="test-btn secondary" onclick="runAdvancedTests()">⚡ 高级功能测试</button>
+            <button class="test-btn secondary" onclick="runUITests()">🎨 UI交互测试</button>
+            <button class="test-btn danger" onclick="clearAllTests()">🗑️ 清空结果</button>
+            <button class="test-btn secondary" onclick="exportResults()">📄 导出报告</button>
+        </div>
+    </div>
+
+    <!-- 应用程序iframe -->
+    <div class="test-container">
+        <h3>🖥️ 应用程序预览</h3>
+        <div class="iframe-container">
+            <iframe src="index.html" id="app-iframe"></iframe>
+        </div>
+    </div>
+
+    <!-- 测试用例部分 -->
+    <div class="test-container">
+        <h3>📋 测试用例详情</h3>
+        <div id="test-sections"></div>
+    </div>
+
+    <!-- 隐藏的测试数据 -->
+    <div class="test-data">
+        <div id="test-inputs">
+            <div data-name="danbooru-sample">General
+?
+1girl 6.1M
+long hair 3.2M
+blue eyes 2.1M
+?
+nsfw 500K
+watermark 100K</div>
+            <div data-name="gelbooru-sample">Artist? nekotokage 169Character? shirayuki tomoe 939Tag? 1girl 8032615 long hair 5429123 blue eyes 3241567 nsfw 892456</div>
+            <div data-name="standard-sample">masterpiece, best quality, 1girl, long hair, blue eyes, watermark, nsfw, bad quality</div>
+            <div data-name="complex-sample">1girl, red hat, hat, beautiful girl, girl, sfw, nsfw, masterpiece, best quality, quality</div>
+        </div>
+    </div>
+
+    <script>
+        // 测试配置
+        const testConfig = {
+            totalTests: 0,
+            passedTests: 0,
+            failedTests: 0,
+            currentTest: 0,
+            testResults: [],
+            startTime: null,
+            iframe: null
+        };
+
+        // 测试用例定义
+        const testSuites = {
+            basic: {
+                name: '基础功能测试',
+                tests: [
+                    {
+                        name: 'FilterManager初始化',
+                        description: '验证GroupedFilterManager正确初始化',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            return app.filterManager instanceof app.GroupedFilterManager;
+                        }
+                    },
+                    {
+                        name: '配置加载和保存',
+                        description: '验证配置的持久化功能',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            const originalGroups = app.filterManager.groups.length;
+                            
+                            // 添加测试组
+                            app.filterManager.addGroup('测试组');
+                            const newGroups = app.filterManager.groups.length;
+                            
+                            return newGroups === originalGroups + 1;
+                        }
+                    },
+                    {
+                        name: '空状态处理',
+                        description: '验证无组时的空状态显示',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            // 清空所有组
+                            app.filterManager.groups = [];
+                            await simulateUIUpdate(app);
+                            
+                            const emptyState = getElement('empty-state');
+                            return emptyState && emptyState.style.display !== 'none';
+                        }
+                    }
+                ]
+            },
+            groupManagement: {
+                name: '组管理功能',
+                tests: [
+                    {
+                        name: '添加新组',
+                        description: '验证新组创建功能',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            const initialCount = app.filterManager.groups.length;
+                            
+                            const newGroup = app.filterManager.addGroup('新测试组');
+                            
+                            return newGroup && 
+                                   newGroup.name === '新测试组' && 
+                                   app.filterManager.groups.length === initialCount + 1;
+                        }
+                    },
+                    {
+                        name: '复制组',
+                        description: '验证组复制功能',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            // 创建源组
+                            const sourceGroup = app.filterManager.addGroup('源组');
+                            sourceGroup.keywords = ['test1', 'test2'];
+                            sourceGroup.replacement = 'replacement';
+                            
+                            // 复制组
+                            const duplicatedGroup = app.filterManager.duplicateGroup(sourceGroup.id);
+                            
+                            return duplicatedGroup && 
+                                   duplicatedGroup.name === '源组(副本)' &&
+                                   duplicatedGroup.keywords.length === 2 &&
+                                   duplicatedGroup.replacement === 'replacement';
+                        }
+                    },
+                    {
+                        name: '删除组',
+                        description: '验证组删除功能',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            const testGroup = app.filterManager.addGroup('待删除组');
+                            const initialCount = app.filterManager.groups.length;
+                            
+                            const result = app.filterManager.deleteGroup(testGroup.id);
+                            
+                            return result && app.filterManager.groups.length === initialCount - 1;
+                        }
+                    },
+                    {
+                        name: '更新组',
+                        description: '验证组信息更新功能',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            const testGroup = app.filterManager.addGroup('原始组名');
+                            const result = app.filterManager.updateGroup(testGroup.id, {
+                                name: '更新后的组名',
+                                enabled: false
+                            });
+                            
+                            const updatedGroup = app.filterManager.getGroup(testGroup.id);
+                            
+                            return result && 
+                                   updatedGroup.name === '更新后的组名' &&
+                                   updatedGroup.enabled === false;
+                        }
+                    },
+                    {
+                        name: '组排序',
+                        description: '验证组顺序调整功能',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            // 创建多个组
+                            app.filterManager.groups = [];
+                            const group1 = app.filterManager.addGroup('组1');
+                            const group2 = app.filterManager.addGroup('组2');
+                            const group3 = app.filterManager.addGroup('组3');
+                            
+                            // 重新排序
+                            app.filterManager.reorderGroups([group3.id, group1.id, group2.id]);
+                            
+                            return app.filterManager.groups[0].id === group3.id &&
+                                   app.filterManager.groups[1].id === group1.id &&
+                                   app.filterManager.groups[2].id === group2.id;
+                        }
+                    }
+                ]
+            },
+            filterAlgorithm: {
+                name: '过滤算法测试',
+                tests: [
+                    {
+                        name: '单组基础过滤',
+                        description: '验证单个组的基础过滤功能',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            // 设置测试组
+                            app.filterManager.groups = [];
+                            const testGroup = app.filterManager.addGroup('测试过滤');
+                            testGroup.keywords = ['nsfw', 'watermark'];
+                            
+                            app.filterManager.setMasterEnabled(true);
+                            
+                            const input = ['1girl', 'nsfw', 'watermark', 'best quality'];
+                            const result = app.filterManager.applyFilter(input);
+                            
+                            return result.includes('1girl') && 
+                                   result.includes('best quality') &&
+                                   !result.includes('nsfw') && 
+                                   !result.includes('watermark');
+                        }
+                    },
+                    {
+                        name: '替换短语功能',
+                        description: '验证替换短语正确插入',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            app.filterManager.groups = [];
+                            const testGroup = app.filterManager.addGroup('替换测试');
+                            testGroup.keywords = ['nsfw'];
+                            testGroup.replacement = 'sfw, safe';
+                            
+                            app.filterManager.setMasterEnabled(true);
+                            
+                            const input = ['1girl', 'nsfw', 'best quality'];
+                            const result = app.filterManager.applyFilter(input);
+                            
+                            return result.includes('1girl') && 
+                                   result.includes('sfw') && 
+                                   result.includes('safe') && 
+                                   result.includes('best quality') &&
+                                   !result.includes('nsfw');
+                        }
+                    },
+                    {
+                        name: '多组顺序处理',
+                        description: '验证多组按顺序执行',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            app.filterManager.groups = [];
+                            
+                            // 第一组：nsfw -> sfw
+                            const group1 = app.filterManager.addGroup('组1');
+                            group1.keywords = ['nsfw'];
+                            group1.replacement = 'sfw';
+                            
+                            // 第二组：sfw -> safe
+                            const group2 = app.filterManager.addGroup('组2');
+                            group2.keywords = ['sfw'];
+                            group2.replacement = 'safe';
+                            
+                            app.filterManager.setMasterEnabled(true);
+                            
+                            const input = ['1girl', 'nsfw'];
+                            const result = app.filterManager.applyFilter(input);
+                            
+                            return result.includes('1girl') && 
+                                   result.includes('safe') &&
+                                   !result.includes('nsfw') && 
+                                   !result.includes('sfw');
+                        }
+                    },
+                    {
+                        name: '正则表达式支持',
+                        description: '验证正则表达式匹配功能',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            app.filterManager.groups = [];
+                            const testGroup = app.filterManager.addGroup('正则测试');
+                            testGroup.keywords = ['\\d+px', 'bad.*quality'];
+                            
+                            app.filterManager.setMasterEnabled(true);
+                            
+                            const input = ['1girl', '1024px', 'bad quality', 'masterpiece'];
+                            const result = app.filterManager.applyFilter(input);
+                            
+                            return result.includes('1girl') && 
+                                   result.includes('masterpiece') &&
+                                   !result.includes('1024px') && 
+                                   !result.includes('bad quality');
+                        }
+                    },
+                    {
+                        name: '命中计数统计',
+                        description: '验证命中计数正确记录',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            app.filterManager.groups = [];
+                            const testGroup = app.filterManager.addGroup('计数测试');
+                            testGroup.keywords = ['test'];
+                            
+                            app.filterManager.setMasterEnabled(true);
+                            
+                            const input = ['test', '1girl', 'test', 'quality'];
+                            app.filterManager.applyFilter(input);
+                            
+                            return testGroup.meta.lastMatchCount === 2;
+                        }
+                    }
+                ]
+            },
+            simplification: {
+                name: '提示词简化测试',
+                tests: [
+                    {
+                        name: '简化功能开关',
+                        description: '验证简化功能开关控制',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            app.filterManager.setMasterEnabled(true);
+                            app.filterManager.setSimplifyEnabled(true);
+                            
+                            const input = ['hat', 'red hat', 'girl', 'beautiful girl'];
+                            const result = app.filterManager.applyFilter(input);
+                            
+                            return result.includes('red hat') && 
+                                   result.includes('beautiful girl') &&
+                                   !result.includes('hat') && 
+                                   !result.includes('girl');
+                        }
+                    },
+                    {
+                        name: '简化统计计数',
+                        description: '验证简化移除计数正确',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            app.filterManager.setMasterEnabled(true);
+                            app.filterManager.setSimplifyEnabled(true);
+                            
+                            const input = ['hat', 'red hat', 'girl', 'beautiful girl', 'quality', 'best quality'];
+                            app.filterManager.applyFilter(input);
+                            
+                            return app.filterManager.lastSimplifiedCount === 3; // hat, girl, quality
+                        }
+                    }
+                ]
+            },
+            importExport: {
+                name: '导入导出测试',
+                tests: [
+                    {
+                        name: '配置导出',
+                        description: '验证配置导出功能',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            app.filterManager.groups = [];
+                            app.filterManager.addGroup('导出测试组');
+                            
+                            const exported = app.filterManager.exportConfig();
+                            const config = JSON.parse(exported);
+                            
+                            return config.schemaVersion === 1 && 
+                                   Array.isArray(config.groups) && 
+                                   config.groups.length > 0 &&
+                                   config.groups[0].name === '导出测试组';
+                        }
+                    },
+                    {
+                        name: '配置导入验证',
+                        description: '验证配置导入验证功能',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            const validConfig = {
+                                masterEnabled: true,
+                                simplifyEnabled: false,
+                                groups: [
+                                    {
+                                        id: 'test-id',
+                                        name: '导入测试',
+                                        enabled: true,
+                                        collapsed: true,
+                                        keywords: ['test'],
+                                        replacement: ''
+                                    }
+                                ],
+                                schemaVersion: 1
+                            };
+                            
+                            const validation = app.filterManager.validateImportConfig(validConfig);
+                            return validation.valid === true;
+                        }
+                    },
+                    {
+                        name: '配置导入应用',
+                        description: '验证配置导入并应用功能',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            const testConfig = {
+                                masterEnabled: true,
+                                simplifyEnabled: false,
+                                groups: [
+                                    {
+                                        id: 'imported-group',
+                                        name: '导入的组',
+                                        enabled: true,
+                                        collapsed: true,
+                                        keywords: ['imported'],
+                                        replacement: 'processed'
+                                    }
+                                ],
+                                schemaVersion: 1
+                            };
+                            
+                            const result = app.filterManager.importConfig(JSON.stringify(testConfig), false);
+                            const importedGroup = app.filterManager.groups.find(g => g.name === '导入的组');
+                            
+                            return result.success && importedGroup && importedGroup.keywords.includes('imported');
+                        }
+                    }
+                ]
+            },
+            validation: {
+                name: '数据验证测试',
+                tests: [
+                    {
+                        name: '替换短语格式验证',
+                        description: '验证替换短语格式检查',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            const validReplacement = 'tag1, tag2, tag3';
+                            const invalidReplacement = 'tag1,tag2,tag3';
+                            
+                            const validResult = app.filterManager._isValidReplacement(validReplacement);
+                            const invalidResult = app.filterManager._isValidReplacement(invalidReplacement);
+                            
+                            return validResult === true && invalidResult === false;
+                        }
+                    },
+                    {
+                        name: '替换短语解析',
+                        description: '验证替换短语正确解析',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            const replacement = 'tag1, tag2, tag3';
+                            const parsed = app.filterManager._parseReplacementString(replacement);
+                            
+                            return Array.isArray(parsed) && 
+                                   parsed.length === 3 && 
+                                   parsed.includes('tag1') && 
+                                   parsed.includes('tag2') && 
+                                   parsed.includes('tag3');
+                        }
+                    },
+                    {
+                        name: '去重功能',
+                        description: '验证数组去重功能',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            const input = ['tag1', 'tag2', 'tag1', 'tag3', 'tag2'];
+                            const result = app.filterManager._dedupeKeepFirst(input);
+                            
+                            return result.length === 3 && 
+                                   result[0] === 'tag1' && 
+                                   result[1] === 'tag2' && 
+                                   result[2] === 'tag3';
+                        }
+                    }
+                ]
+            },
+            integration: {
+                name: '集成测试',
+                tests: [
+                    {
+                        name: 'Danbooru格式完整流程',
+                        description: '验证Danbooru格式的完整处理流程',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            // 设置过滤组
+                            app.filterManager.groups = [];
+                            const filterGroup = app.filterManager.addGroup('内容过滤');
+                            filterGroup.keywords = ['nsfw', 'watermark'];
+                            filterGroup.replacement = 'sfw';
+                            
+                            app.filterManager.setMasterEnabled(true);
+                            app.filterManager.setSimplifyEnabled(true);
+                            
+                            const danbooruInput = `General
+?
+1girl 6.1M
+long hair 3.2M
+hat 1M
+red hat 500K
+nsfw 200K
+watermark 100K`;
+                            
+                            // 模拟完整转换流程
+                            const result = app.convert(danbooruInput);
+                            
+                            return Array.isArray(result) && 
+                                   result.includes('1girl') && 
+                                   result.includes('long hair') && 
+                                   result.includes('red hat') && 
+                                   result.includes('sfw') && 
+                                   !result.includes('hat') && // 被简化移除
+                                   !result.includes('nsfw') && // 被过滤
+                                   !result.includes('watermark'); // 被过滤
+                        }
+                    },
+                    {
+                        name: '总开关控制',
+                        description: '验证总开关对所有功能的控制',
+                        test: async () => {
+                            const app = await getAppInstance();
+                            
+                            // 设置过滤组
+                            app.filterManager.groups = [];
+                            const filterGroup = app.filterManager.addGroup('测试组');
+                            filterGroup.keywords = ['test'];
+                            
+                            app.filterManager.setMasterEnabled(false); // 关闭总开关
+                            app.filterManager.setSimplifyEnabled(true);
+                            
+                            const input = ['test', 'hat', 'red hat'];
+                            const result = app.filterManager.applyFilter(input);
+                            
+                            // 总开关关闭时，应该原样返回
+                            return result.length === input.length && 
+                                   result.includes('test') && 
+                                   result.includes('hat') && 
+                                   result.includes('red hat');
+                        }
+                    }
+                ]
+            }
+        };
+
+        // 工具函数
+        async function getAppInstance() {
+            if (!testConfig.iframe) {
+                testConfig.iframe = document.getElementById('app-iframe');
+            }
+            
+            return new Promise((resolve) => {
+                if (testConfig.iframe.contentWindow.tagConverter) {
+                    resolve(testConfig.iframe.contentWindow);
+                } else {
+                    testConfig.iframe.onload = () => {
+                        setTimeout(() => {
+                            resolve(testConfig.iframe.contentWindow);
+                        }, 100);
+                    };
+                }
+            });
+        }
+
+        function getElement(id) {
+            return testConfig.iframe.contentDocument.getElementById(id);
+        }
+
+        async function simulateUIUpdate(app) {
+            // 模拟UI更新
+            if (app.initializeGroupedFilterUI) {
+                app.initializeGroupedFilterUI();
+            }
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        // 测试执行函数
+        async function runTestSuite(suiteName) {
+            const suite = testSuites[suiteName];
+            if (!suite) return;
+
+            const sectionDiv = createTestSection(suite.name);
+            
+            for (const testCase of suite.tests) {
+                const caseDiv = createTestCase(testCase.name, testCase.description);
+                sectionDiv.appendChild(caseDiv);
+                
+                testConfig.currentTest++;
+                updateProgress();
+                
+                try {
+                    caseDiv.className += ' running';
+                    const result = await testCase.test();
+                    
+                    if (result) {
+                        caseDiv.className = caseDiv.className.replace(' running', ' passed');
+                        testConfig.passedTests++;
+                        
+                        const output = document.createElement('div');
+                        output.className = 'test-output';
+                        output.textContent = '✅ 测试通过';
+                        caseDiv.appendChild(output);
+                    } else {
+                        throw new Error('测试条件不满足');
+                    }
+                } catch (error) {
+                    caseDiv.className = caseDiv.className.replace(' running', ' failed');
+                    testConfig.failedTests++;
+                    
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'test-error';
+                    errorDiv.textContent = `❌ ${error.message}`;
+                    caseDiv.appendChild(errorDiv);
+                }
+                
+                testConfig.testResults.push({
+                    suite: suite.name,
+                    test: testCase.name,
+                    passed: caseDiv.classList.contains('passed'),
+                    error: caseDiv.classList.contains('failed') ? caseDiv.querySelector('.test-error')?.textContent : null
+                });
+                
+                updateStats();
+                await new Promise(resolve => setTimeout(resolve, 100)); // 短暂延迟
+            }
+        }
+
+        function createTestSection(name) {
+            const sectionsContainer = document.getElementById('test-sections');
+            
+            const section = document.createElement('div');
+            section.className = 'test-section';
+            section.innerHTML = `<h3>${name}</h3>`;
+            
+            sectionsContainer.appendChild(section);
+            return section;
+        }
+
+        function createTestCase(name, description) {
+            const caseDiv = document.createElement('div');
+            caseDiv.className = 'test-case';
+            
+            const header = document.createElement('h4');
+            header.textContent = name;
+            caseDiv.appendChild(header);
+            
+            const desc = document.createElement('div');
+            desc.className = 'test-description';
+            desc.textContent = description;
+            caseDiv.appendChild(desc);
+            
+            return caseDiv;
+        }
+
+        function updateStats() {
+            document.getElementById('total-tests').textContent = testConfig.currentTest;
+            document.getElementById('passed-tests').textContent = testConfig.passedTests;
+            document.getElementById('failed-tests').textContent = testConfig.failedTests;
+            
+            const successRate = testConfig.currentTest > 0 
+                ? Math.round((testConfig.passedTests / testConfig.currentTest) * 100)
+                : 0;
+            document.getElementById('success-rate').textContent = successRate + '%';
+        }
+
+        function updateProgress() {
+            const totalTests = Object.values(testSuites).reduce((sum, suite) => sum + suite.tests.length, 0);
+            const progress = (testConfig.currentTest / totalTests) * 100;
+            document.getElementById('progress-fill').style.width = progress + '%';
+        }
+
+        function updateOverallStatus(status) {
+            const statusEl = document.getElementById('overall-status');
+            statusEl.textContent = status;
+            statusEl.className = `status-badge status-${status.toLowerCase().replace(/\s+/g, '-')}`;
+        }
+
+        // 主要测试函数
+        async function runAllTests() {
+            initializeTest();
+            updateOverallStatus('运行中');
+            
+            try {
+                await runTestSuite('basic');
+                await runTestSuite('groupManagement');
+                await runTestSuite('filterAlgorithm');
+                await runTestSuite('simplification');
+                await runTestSuite('importExport');
+                await runTestSuite('validation');
+                await runTestSuite('integration');
+                
+                const success = testConfig.failedTests === 0;
+                updateOverallStatus(success ? '全部通过' : '部分失败');
+                
+                showCompletionMessage();
+            } catch (error) {
+                updateOverallStatus('运行失败');
+                console.error('测试运行出错:', error);
+            }
+        }
+
+        async function runBasicTests() {
+            initializeTest();
+            updateOverallStatus('运行中');
+            await runTestSuite('basic');
+            await runTestSuite('groupManagement');
+            updateOverallStatus(testConfig.failedTests === 0 ? '基础测试通过' : '基础测试失败');
+        }
+
+        async function runAdvancedTests() {
+            initializeTest();
+            updateOverallStatus('运行中');
+            await runTestSuite('filterAlgorithm');
+            await runTestSuite('simplification');
+            await runTestSuite('importExport');
+            updateOverallStatus(testConfig.failedTests === 0 ? '高级测试通过' : '高级测试失败');
+        }
+
+        async function runUITests() {
+            initializeTest();
+            updateOverallStatus('运行中');
+            await runTestSuite('validation');
+            await runTestSuite('integration');
+            updateOverallStatus(testConfig.failedTests === 0 ? 'UI测试通过' : 'UI测试失败');
+        }
+
+        function initializeTest() {
+            testConfig.totalTests = 0;
+            testConfig.passedTests = 0;
+            testConfig.failedTests = 0;
+            testConfig.currentTest = 0;
+            testConfig.testResults = [];
+            testConfig.startTime = Date.now();
+            
+            document.getElementById('test-sections').innerHTML = '';
+            updateStats();
+            updateProgress();
+        }
+
+        function clearAllTests() {
+            initializeTest();
+            updateOverallStatus('准备中');
+        }
+
+        function showCompletionMessage() {
+            const duration = Date.now() - testConfig.startTime;
+            const message = `
+测试完成！
+总耗时: ${(duration / 1000).toFixed(2)}秒
+通过率: ${Math.round((testConfig.passedTests / testConfig.currentTest) * 100)}%
+            `.trim();
+            
+            alert(message);
+        }
+
+        function exportResults() {
+            const report = {
+                timestamp: new Date().toISOString(),
+                duration: testConfig.startTime ? Date.now() - testConfig.startTime : 0,
+                summary: {
+                    total: testConfig.currentTest,
+                    passed: testConfig.passedTests,
+                    failed: testConfig.failedTests,
+                    successRate: Math.round((testConfig.passedTests / testConfig.currentTest) * 100)
+                },
+                results: testConfig.testResults
+            };
+            
+            const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `test-report-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            URL.revokeObjectURL(url);
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('测试页面已加载');
+            
+            // 计算总测试数
+            const totalTests = Object.values(testSuites).reduce((sum, suite) => sum + suite.tests.length, 0);
+            console.log(`总共 ${totalTests} 个测试用例`);
+        });
+    </script>
+</body>
+</html>
