@@ -458,8 +458,7 @@ input:checked + .toggle-slider:before {
 
 .group-toggle {
     position: relative;
-    display: flex;
-    align-items: center;
+    display: inline-block;
     width: 40px;
     height: 22px;
     flex-shrink: 0;
@@ -722,6 +721,11 @@ input:checked + .toggle-slider:before {
     outline: none;
     border-color: #007AFF;
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+
+.replacement-input::placeholder {
+    color: #999;
+    opacity: 1;
 }
 
 .replacement-input.error {
