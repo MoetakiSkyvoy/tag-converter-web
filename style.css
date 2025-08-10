@@ -465,6 +465,12 @@ input:checked + .toggle-slider:before {
     flex-shrink: 0;
 }
 
+.group-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
 .group-name {
     flex: 1;
     border: none;
@@ -633,6 +639,8 @@ input:checked + .toggle-slider:before {
     margin-bottom: 0.5rem;
     flex: 1;
     cursor: text;
+    min-height: 32px;
+    align-items: flex-start;
 }
 
 .keyword-tag {
@@ -687,6 +695,9 @@ input:checked + .toggle-slider:before {
     outline: none;
     font-size: 13px;
     font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+    min-height: 24px;
+    padding: 4px 0;
+    background: transparent;
 }
 
 .keywords-help, .replacement-help, .filter-help {
