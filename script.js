@@ -2220,8 +2220,8 @@ function updateFilterKeywords() {
  * - 实时更新按钮文本反映当前状态
  * 
  * 交互逻辑：
- * - 折叠状态：显示"展开设置"
- * - 展开状态：显示"收起设置"
+ * - 折叠状态：显示"▼ 展开设置"
+ * - 展开状态：显示"▲ 收起设置"
  */
 function toggleFilterSection() {
     const content = document.getElementById('filter-content');
@@ -2229,10 +2229,10 @@ function toggleFilterSection() {
     
     if (content.style.display === 'none' || content.style.display === '') {
         content.style.display = 'block';
-        button.textContent = '收起设置';
+        button.textContent = '▲ 收起设置';
     } else {
         content.style.display = 'none';
-        button.textContent = '展开设置';
+        button.textContent = '▼ 展开设置';
     }
 }
 
