@@ -2496,6 +2496,18 @@ function updateEmptyState() {
  * 添加新组
  */
 function addGroup() {
+    // 如果过滤器区域是折叠状态，先展开
+    const content = document.getElementById('filter-content');
+    const expandButton = document.getElementById('filter-expand');
+    
+    if (content && (content.style.display === 'none' || content.style.display === '')) {
+        // 展开过滤器区域
+        content.style.display = 'block';
+        if (expandButton) {
+            expandButton.textContent = '▲ 收起设置';
+        }
+    }
+    
     const newGroup = tagConverter.filterManager.addGroup();
     renderAllGroups();
     updateFilterStats();
