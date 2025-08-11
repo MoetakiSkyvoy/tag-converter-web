@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>组匹配徽章功能测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f7;
+            line-height: 1.6;
+        }
+
+        .test-container {
+            background: white;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #007AFF;
+            padding-bottom: 15px;
+        }
+
+        .test-title {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+
+        .test-status {
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .status-pending { background: #f2f2f7; color: #666; }
+        .status-running { background: #e3f2fd; color: #1976d2; }
+        .status-completed { background: #e8f5e8; color: #2e7d32; }
+        .status-failed { background: #ffebee; color: #d32f2f; }
+
+        .progress-container {
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 12px;
+            background: #e0e0e0;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #007AFF, #34C759);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .test-case {
+            margin: 15px 0;
+            padding: 20px;
+            background: #fafafa;
+            border-radius: 10px;
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s ease;
+        }
+
+        .test-case.running {
+            border-color: #2196F3;
+            background: #e3f2fd;
+            animation: pulse 1.5s infinite;
+        }
+
+        .test-case.passed {
+            border-color: #4CAF50;
+            background: #e8f5e8;
+        }
+
+        .test-case.failed {
+            border-color: #f44336;
+            background: #ffebee;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+
+        .test-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .test-description {
+            font-size: 0.95rem;
+            color: #666;
+            margin-bottom: 12px;
+        }
+
+        .test-result {
+            font-family: monospace;
+            font-size: 0.85rem;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 12px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .test-result.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .test-result.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            border-left: 4px solid #007AFF;
+        }
+
+        .stat-number {
+            font-size: 1.6rem;
+            font-weight: 600;
+            color: #007AFF;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .report-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 2px dashed #007AFF;
+        }
+
+        .report-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .report-content {
+            background: #1e1e1e;
+            color: #f0f0f0;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .copy-button {
+            margin-top: 10px;
+            padding: 10px 20px;
+            background: #007AFF;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+
+        .copy-button:hover {
+            background: #0056CC;
+        }
+
+        .auto-start-notice {
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <div class="test-header">
+            <h1 class="test-title">🏷️ 组匹配徽章功能测试</h1>
+            <div class="test-status status-pending" id="overall-status">准备启动</div>
+        </div>
+
+        <div class="auto-start-notice">
+            ⚡ 测试将在页面加载完成后自动开始，无需手动操作
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="stat-number" id="total-tests">0</span>
+                <div class="stat-label">总测试数</div>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="passed-tests">0</span>
+                <div class="stat-label">通过</div>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="failed-tests">0</span>
+                <div class="stat-label">失败</div>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="success-rate">0%</span>
+                <div class="stat-label">成功率</div>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="duration">0s</span>
+                <div class="stat-label">耗时</div>
+            </div>
+        </div>
+
+        <div class="progress-container">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="progress-text" id="progress-text">等待开始...</div>
+        </div>
+
+        <div id="test-cases-container"></div>
+    </div>
+
+    <div class="report-section" id="report-section" style="display: none;">
+        <h2 class="report-title">📋 测试报告 (Plaintext)</h2>
+        <div class="report-content" id="report-content"></div>
+        <button class="copy-button" onclick="copyReport()">📋 复制报告</button>
+    </div>
+
+    <script>
+        // 测试框架
+        class BadgeTestRunner {
+            constructor() {
+                this.tests = [];
+                this.results = [];
+                this.startTime = null;
+                this.endTime = null;
+                this.currentTestIndex = 0;
+                this.filterManager = null;
+                this.uiManager = null;
+                this.setupTestEnvironment();
+            }
+
+            setupTestEnvironment() {
+                // 模拟核心组件
+                this.filterManager = new MockFilterManager();
+                this.uiManager = new MockUIManager();
+                
+                // 创建模拟的DOM结构
+                this.createMockDOM();
+            }
+
+            createMockDOM() {
+                // 创建测试用的DOM结构
+                const mockContainer = document.createElement('div');
+                mockContainer.id = 'mock-filter-groups';
+                mockContainer.innerHTML = `
+                    <div class="group-card" data-group-id="test-group-1">
+                        <div class="group-match-badge">•0</div>
+                    </div>
+                    <div class="group-card" data-group-id="test-group-2">
+                        <div class="group-match-badge">•0</div>
+                    </div>
+                    <div class="group-card" data-group-id="test-group-3">
+                        <div class="group-match-badge">•0</div>
+                    </div>
+                `;
+                document.body.appendChild(mockContainer);
+            }
+
+            addTest(name, description, testFn) {
+                this.tests.push({ name, description, testFn });
+            }
+
+            async runAllTests() {
+                this.startTime = Date.now();
+                this.updateStatus('running', '测试运行中');
+                this.currentTestIndex = 0;
+
+                for (let i = 0; i < this.tests.length; i++) {
+                    const test = this.tests[i];
+                    const testCase = this.createTestCaseElement(test, i);
+                    
+                    this.updateProgress((i / this.tests.length) * 100, `正在运行: ${test.name}`);
+                    
+                    try {
+                        testCase.classList.add('running');
+                        const result = await this.runSingleTest(test, i);
+                        this.results.push(result);
+                        
+                        if (result.success) {
+                            testCase.classList.remove('running');
+                            testCase.classList.add('passed');
+                            this.updateTestResult(testCase, result.message, 'success');
+                        } else {
+                            testCase.classList.remove('running');
+                            testCase.classList.add('failed');
+                            this.updateTestResult(testCase, result.message, 'error');
+                        }
+                    } catch (error) {
+                        const result = {
+                            testIndex: i,
+                            testName: test.name,
+                            success: false,
+                            message: `测试执行失败: ${error.message}`,
+                            error: error.stack
+                        };
+                        this.results.push(result);
+                        
+                        testCase.classList.remove('running');
+                        testCase.classList.add('failed');
+                        this.updateTestResult(testCase, result.message, 'error');
+                    }
+                    
+                    // 更新统计
+                    this.updateStats();
+                    
+                    // 短暂延迟以便观察
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+
+                this.endTime = Date.now();
+                this.finishTests();
+            }
+
+            async runSingleTest(test, index) {
+                try {
+                    const result = await test.testFn();
+                    return {
+                        testIndex: index,
+                        testName: test.name,
+                        success: true,
+                        message: result || '测试通过',
+                        duration: Date.now() - this.startTime
+                    };
+                } catch (error) {
+                    return {
+                        testIndex: index,
+                        testName: test.name,
+                        success: false,
+                        message: error.message,
+                        error: error.stack
+                    };
+                }
+            }
+
+            createTestCaseElement(test, index) {
+                const container = document.getElementById('test-cases-container');
+                const testCase = document.createElement('div');
+                testCase.className = 'test-case';
+                testCase.id = `test-case-${index}`;
+                
+                testCase.innerHTML = `
+                    <div class="test-name">${test.name}</div>
+                    <div class="test-description">${test.description}</div>
+                    <div class="test-result" style="display: none;"></div>
+                `;
+                
+                container.appendChild(testCase);
+                return testCase;
+            }
+
+            updateTestResult(testCase, message, type) {
+                const resultDiv = testCase.querySelector('.test-result');
+                resultDiv.textContent = message;
+                resultDiv.className = `test-result ${type}`;
+                resultDiv.style.display = 'block';
+            }
+
+            updateStatus(status, text) {
+                const statusElement = document.getElementById('overall-status');
+                statusElement.className = `test-status status-${status}`;
+                statusElement.textContent = text;
+            }
+
+            updateProgress(percentage, text) {
+                const progressFill = document.getElementById('progress-fill');
+                const progressText = document.getElementById('progress-text');
+                
+                progressFill.style.width = `${percentage}%`;
+                progressText.textContent = text;
+            }
+
+            updateStats() {
+                const totalTests = this.results.length;
+                const passedTests = this.results.filter(r => r.success).length;
+                const failedTests = totalTests - passedTests;
+                const successRate = totalTests > 0 ? Math.round((passedTests / totalTests) * 100) : 0;
+                const duration = this.endTime ? Math.round((this.endTime - this.startTime) / 1000) : Math.round((Date.now() - this.startTime) / 1000);
+
+                document.getElementById('total-tests').textContent = this.tests.length;
+                document.getElementById('passed-tests').textContent = passedTests;
+                document.getElementById('failed-tests').textContent = failedTests;
+                document.getElementById('success-rate').textContent = `${successRate}%`;
+                document.getElementById('duration').textContent = `${duration}s`;
+            }
+
+            finishTests() {
+                const passedTests = this.results.filter(r => r.success).length;
+                const totalTests = this.results.length;
+                
+                if (passedTests === totalTests) {
+                    this.updateStatus('completed', '全部测试通过');
+                    this.updateProgress(100, '测试完成 - 全部通过');
+                } else {
+                    this.updateStatus('failed', `${totalTests - passedTests} 个测试失败`);
+                    this.updateProgress(100, `测试完成 - ${passedTests}/${totalTests} 通过`);
+                }
+
+                this.generateReport();
+            }
+
+            generateReport() {
+                const reportContent = document.getElementById('report-content');
+                const reportSection = document.getElementById('report-section');
+                
+                const duration = Math.round((this.endTime - this.startTime) / 1000);
+                const passedTests = this.results.filter(r => r.success).length;
+                const totalTests = this.results.length;
+                const successRate = Math.round((passedTests / totalTests) * 100);
+
+                let report = `组匹配徽章功能测试报告
+==========================================
+
+测试概览:
+- 总测试数: ${totalTests}
+- 通过: ${passedTests}
+- 失败: ${totalTests - passedTests}
+- 成功率: ${successRate}%
+- 测试耗时: ${duration}s
+- 测试时间: ${new Date().toLocaleString()}
+
+测试详情:
+`;
+
+                this.results.forEach((result, index) => {
+                    report += `
+${index + 1}. ${result.testName}
+   状态: ${result.success ? '✅ 通过' : '❌ 失败'}
+   消息: ${result.message}
+`;
+
+                    if (!result.success && result.error) {
+                        report += `   错误详情: ${result.error}\n`;
+                    }
+                });
+
+                report += `
+==========================================
+测试总结: ${passedTests === totalTests ? '全部测试通过' : `有 ${totalTests - passedTests} 个测试失败`}
+`;
+
+                reportContent.textContent = report;
+                reportSection.style.display = 'block';
+            }
+        }
+
+        // 模拟过滤器管理器
+        class MockFilterManager {
+            constructor() {
+                this.groups = [
+                    {
+                        id: 'test-group-1',
+                        name: '测试组1',
+                        enabled: true,
+                        keywords: ['censored'],
+                        meta: { lastMatchCount: 0 }
+                    },
+                    {
+                        id: 'test-group-2',
+                        name: '测试组2',
+                        enabled: true,
+                        keywords: ['girl'],
+                        meta: { lastMatchCount: 0 }
+                    },
+                    {
+                        id: 'test-group-3',
+                        name: '测试组3',
+                        enabled: false,
+                        keywords: ['test'],
+                        meta: { lastMatchCount: 0 }
+                    }
+                ];
+                this.masterEnabled = true;
+            }
+
+            applyFilter(tags) {
+                // 模拟过滤逻辑
+                this.groups.forEach(group => {
+                    if (!group.enabled) {
+                        group.meta.lastMatchCount = 0;
+                        return;
+                    }
+
+                    let matchCount = 0;
+                    for (const keyword of group.keywords) {
+                        for (const tag of tags) {
+                            if (tag.toLowerCase().includes(keyword.toLowerCase())) {
+                                matchCount++;
+                            }
+                        }
+                    }
+                    group.meta.lastMatchCount = matchCount;
+                });
+
+                return tags;
+            }
+
+            getStatus() {
+                return {
+                    enabled: this.masterEnabled,
+                    groups: this.groups,
+                    keywordCount: this.groups.length,
+                    lastFilteredCount: this.groups.reduce((sum, g) => sum + g.meta.lastMatchCount, 0),
+                    lastSimplifiedCount: 0
+                };
+            }
+        }
+
+        // 模拟UI管理器
+        class MockUIManager {
+            updateGroupMatchBadges(groups, masterEnabled) {
+                groups.forEach(group => {
+                    const groupElement = document.querySelector(`[data-group-id="${group.id}"]`);
+                    if (!groupElement) return;
+                    
+                    const matchBadge = groupElement.querySelector('.group-match-badge');
+                    if (!matchBadge) return;
+                    
+                    const count = group.meta?.lastMatchCount ?? 0;
+                    if (masterEnabled && count > 0) {
+                        matchBadge.textContent = `•${count}`;
+                        matchBadge.classList.add('has-matches');
+                    } else {
+                        matchBadge.textContent = masterEnabled ? '•0' : '—';
+                        matchBadge.classList.remove('has-matches');
+                    }
+                });
+            }
+
+            updateFilterStatus(status) {
+                // 调用徽章更新函数
+                this.updateGroupMatchBadges(status.groups, status.enabled);
+            }
+        }
+
+        // 复制报告功能
+        function copyReport() {
+            const reportContent = document.getElementById('report-content').textContent;
+            navigator.clipboard.writeText(reportContent).then(() => {
+                const button = document.querySelector('.copy-button');
+                const originalText = button.textContent;
+                button.textContent = '✅ 已复制';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            });
+        }
+
+        // 创建并运行测试
+        const testRunner = new BadgeTestRunner();
+
+        // 测试用例1: 基本徽章显示功能
+        testRunner.addTest(
+            '基本徽章显示功能',
+            '测试徽章在有匹配和无匹配情况下的正确显示',
+            async () => {
+                // 测试无匹配情况
+                const testTags = ['masterpiece', 'best quality', '1boy'];
+                testRunner.filterManager.applyFilter(testTags);
+                const status = testRunner.filterManager.getStatus();
+                testRunner.uiManager.updateFilterStatus(status);
+
+                // 验证无匹配时的显示
+                const badge1 = document.querySelector('[data-group-id="test-group-1"] .group-match-badge');
+                if (badge1.textContent !== '•0') {
+                    throw new Error(`期望无匹配时显示 "•0"，实际显示 "${badge1.textContent}"`);
+                }
+
+                // 测试有匹配情况
+                const testTagsWithMatch = ['censored', '1girl', 'masterpiece'];
+                testRunner.filterManager.applyFilter(testTagsWithMatch);
+                const statusWithMatch = testRunner.filterManager.getStatus();
+                testRunner.uiManager.updateFilterStatus(statusWithMatch);
+
+                // 验证有匹配时的显示
+                const badge1WithMatch = document.querySelector('[data-group-id="test-group-1"] .group-match-badge');
+                const badge2WithMatch = document.querySelector('[data-group-id="test-group-2"] .group-match-badge');
+
+                if (badge1WithMatch.textContent !== '•1') {
+                    throw new Error(`期望组1匹配1次显示 "•1"，实际显示 "${badge1WithMatch.textContent}"`);
+                }
+
+                if (badge2WithMatch.textContent !== '•1') {
+                    throw new Error(`期望组2匹配1次显示 "•1"，实际显示 "${badge2WithMatch.textContent}"`);
+                }
+
+                return '基本徽章显示功能正常';
+            }
+        );
+
+        // 测试用例2: 主开关关闭时的徽章显示
+        testRunner.addTest(
+            '主开关关闭时的徽章显示',
+            '测试主开关关闭时徽章显示为 "—"',
+            async () => {
+                testRunner.filterManager.masterEnabled = false;
+                const testTags = ['censored', '1girl'];
+                testRunner.filterManager.applyFilter(testTags);
+                const status = testRunner.filterManager.getStatus();
+                testRunner.uiManager.updateFilterStatus(status);
+
+                const badge1 = document.querySelector('[data-group-id="test-group-1"] .group-match-badge');
+                const badge2 = document.querySelector('[data-group-id="test-group-2"] .group-match-badge');
+
+                if (badge1.textContent !== '—') {
+                    throw new Error(`期望主开关关闭时显示 "—"，实际显示 "${badge1.textContent}"`);
+                }
+
+                if (badge2.textContent !== '—') {
+                    throw new Error(`期望主开关关闭时显示 "—"，实际显示 "${badge2.textContent}"`);
+                }
+
+                // 恢复主开关状态
+                testRunner.filterManager.masterEnabled = true;
+
+                return '主开关关闭时徽章显示正确';
+            }
+        );
+
+        // 测试用例3: 禁用组的徽章显示
+        testRunner.addTest(
+            '禁用组的徽章显示',
+            '测试禁用组的徽章应该显示 "•0"',
+            async () => {
+                const testTags = ['test', 'keyword'];
+                testRunner.filterManager.applyFilter(testTags);
+                const status = testRunner.filterManager.getStatus();
+                testRunner.uiManager.updateFilterStatus(status);
+
+                const badge3 = document.querySelector('[data-group-id="test-group-3"] .group-match-badge');
+                
+                if (badge3.textContent !== '•0') {
+                    throw new Error(`期望禁用组显示 "•0"，实际显示 "${badge3.textContent}"`);
+                }
+
+                return '禁用组徽章显示正确';
+            }
+        );
+
+        // 测试用例4: 多次匹配计数准确性
+        testRunner.addTest(
+            '多次匹配计数准确性',
+            '测试同一组多个关键词匹配时计数的准确性',
+            async () => {
+                // 修改组1的关键词以测试多次匹配
+                testRunner.filterManager.groups[0].keywords = ['1girl', 'girl'];
+                
+                const testTags = ['1girl', 'blonde girl', 'girl next door'];
+                testRunner.filterManager.applyFilter(testTags);
+                const status = testRunner.filterManager.getStatus();
+                testRunner.uiManager.updateFilterStatus(status);
+
+                const badge1 = document.querySelector('[data-group-id="test-group-1"] .group-match-badge');
+                
+                // 应该匹配3次: '1girl'匹配1次, 'girl'匹配3次 = 4次总计
+                if (badge1.textContent !== '•4') {
+                    throw new Error(`期望多次匹配显示 "•4"，实际显示 "${badge1.textContent}"`);
+                }
+
+                return '多次匹配计数准确';
+            }
+        );
+
+        // 测试用例5: CSS类状态测试
+        testRunner.addTest(
+            'CSS类状态测试',
+            '测试has-matches类的正确添加和移除',
+            async () => {
+                // 测试有匹配时添加类
+                const testTagsWithMatch = ['censored'];
+                testRunner.filterManager.groups[0].keywords = ['censored']; // 重置关键词
+                testRunner.filterManager.applyFilter(testTagsWithMatch);
+                const statusWithMatch = testRunner.filterManager.getStatus();
+                testRunner.uiManager.updateFilterStatus(statusWithMatch);
+
+                const badge1 = document.querySelector('[data-group-id="test-group-1"] .group-match-badge');
+                
+                if (!badge1.classList.contains('has-matches')) {
+                    throw new Error('期望有匹配时添加 has-matches 类');
+                }
+
+                // 测试无匹配时移除类
+                const testTagsNoMatch = ['masterpiece'];
+                testRunner.filterManager.applyFilter(testTagsNoMatch);
+                const statusNoMatch = testRunner.filterManager.getStatus();
+                testRunner.uiManager.updateFilterStatus(statusNoMatch);
+
+                if (badge1.classList.contains('has-matches')) {
+                    throw new Error('期望无匹配时移除 has-matches 类');
+                }
+
+                return 'CSS类状态更新正确';
+            }
+        );
+
+        // 页面加载完成后自动开始测试
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                testRunner.runAllTests();
+            }, 500);
+        });
+    </script>
+</body>
+</html>

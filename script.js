@@ -1634,6 +1634,33 @@ class UIManager {
         if (this.elements.simplifiedCount) {
             this.elements.simplifiedCount.textContent = status.lastSimplifiedCount;
         }
+        
+        // 更新各组的匹配徽章显示
+        this.updateGroupMatchBadges(status.groups, status.enabled);
+    }
+    
+    /**
+     * 更新所有组的匹配徽章显示
+     * @param {Array} groups - 组数据数组
+     * @param {boolean} masterEnabled - 主开关是否启用
+     */
+    updateGroupMatchBadges(groups, masterEnabled) {
+        groups.forEach(group => {
+            const groupElement = document.querySelector(`[data-group-id="${group.id}"]`);
+            if (!groupElement) return;
+            
+            const matchBadge = groupElement.querySelector('.group-match-badge');
+            if (!matchBadge) return;
+            
+            const count = group.meta?.lastMatchCount ?? 0;
+            if (masterEnabled && count > 0) {
+                matchBadge.textContent = `•${count}`;
+                matchBadge.classList.add('has-matches');
+            } else {
+                matchBadge.textContent = masterEnabled ? '•0' : '—';
+                matchBadge.classList.remove('has-matches');
+            }
+        });
     }
     
     /**
