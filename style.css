@@ -623,10 +623,14 @@ input:checked + .toggle-slider:before {
     padding: 1rem;
     background: #f8f9fa;
     border-top: 1px solid #e9ecef;
+    box-sizing: border-box;
+    width: 100%;
 }
 
 .group-section {
     margin-bottom: 1rem;
+    box-sizing: border-box;
+    width: 100%;
 }
 
 .group-section:last-child {
@@ -655,6 +659,7 @@ input:checked + .toggle-slider:before {
     font-size: 13px;
     transition: border-color 0.2s ease;
     font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+    box-sizing: border-box;
 }
 
 .keyword-input-simple:focus {
@@ -745,6 +750,7 @@ input:checked + .toggle-slider:before {
     font-size: 13px;
     transition: border-color 0.2s ease;
     font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+    box-sizing: border-box;
 }
 
 .replacement-input:focus {
