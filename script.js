@@ -2523,13 +2523,16 @@ function toggleGroupExpand(button) {
     const groupElement = button.closest('.group-card');
     const groupId = groupElement?.getAttribute('data-group-id');
     const groupContent = groupElement?.querySelector('.group-content');
+    const expandButton = groupElement?.querySelector('.expand-group-btn');
     
-    if (!groupElement || !groupId || !groupContent) return;
+    if (!groupElement || !groupId || !groupContent || !expandButton) return;
     
-    const isExpanded = button.getAttribute('aria-expanded') === 'true';
+    // 基于内容可见性判断当前状态，而不是依赖按钮属性
+    const isExpanded = groupContent.style.display === 'block';
     const newExpanded = !isExpanded;
     
-    button.setAttribute('aria-expanded', newExpanded);
+    // 同步更新展开按钮的aria-expanded属性
+    expandButton.setAttribute('aria-expanded', newExpanded);
     groupContent.style.display = newExpanded ? 'block' : 'none';
     
     // 更新数据
