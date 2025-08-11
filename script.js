@@ -2520,13 +2520,7 @@ function addGroup() {
             const expandBtn = groupElement.querySelector('.expand-group-btn');
             if (expandBtn) {
                 toggleGroupExpand(expandBtn);
-            }
-            
-            // 聚焦到组名输入框
-            const nameInput = groupElement.querySelector('.group-name');
-            if (nameInput) {
-                nameInput.focus();
-                nameInput.select();
+                // toggleGroupExpand会自动聚焦到关键词输入框，符合用户期望
             }
         }
     }, 100);
