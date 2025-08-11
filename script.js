@@ -570,8 +570,26 @@ class GroupedFilterManager {
         if (!replacement.trim()) return true; // 空字符串有效（仅删除）
         
         // 检查是否包含逗号但格式不正确
-        if (replacement.includes(',') && !replacement.includes(', ')) {
-            return false;
+        if (replacement.includes(',')) {
+            // 检查逗号格式：必须严格为 ", " 分隔
+            // 1. 不能有 ",(" 或 " ," 这样的格式
+            // 2. 逗号前不能有空格，逗号后必须有且只有一个空格
+            
+            // 检查错误的逗号格式
+            if (replacement.match(/\s,|,\s{0}(?!\s)|,\s{2,}/)) {
+                return false;
+            }
+            
+            // 进一步验证：分割后重构应该相同，且分割后不应该有空字符串
+            const parts = replacement.split(', ');
+            if (parts.some(part => !part.trim())) {
+                return false;
+            }
+            
+            const reconstructed = parts.join(', ');
+            if (reconstructed !== replacement) {
+                return false;
+            }
         }
         
         return true;
