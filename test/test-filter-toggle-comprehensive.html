@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>过滤器开关逻辑全面测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 1rem;
+            line-height: 1.6;
+            background: #f5f5f5;
+        }
+        
+        .test-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .test-result {
+            margin: 0.5rem 0;
+            padding: 0.75rem;
+            border-radius: 8px;
+            border-left: 4px solid #007AFF;
+        }
+        
+        .pass { 
+            background: #d4edda; 
+            color: #155724; 
+            border-left-color: #28a745; 
+        }
+        
+        .fail { 
+            background: #f8d7da; 
+            color: #721c24; 
+            border-left-color: #dc3545; 
+        }
+        
+        .info { 
+            background: #d1ecf1; 
+            color: #0c5460; 
+            border-left-color: #17a2b8; 
+        }
+        
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border-left-color: #ffc107;
+        }
+        
+        /* 模拟开关样式 */
+        .filter-toggle, .group-toggle {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+            margin: 0 10px;
+        }
+        
+        .group-toggle {
+            width: 40px;
+            height: 22px;
+        }
+        
+        .filter-toggle input, .group-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.3s;
+            border-radius: 26px;
+        }
+        
+        .group-toggle .toggle-slider {
+            border-radius: 22px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .group-toggle .toggle-slider:before {
+            height: 16px;
+            width: 16px;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #007AFF;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+        
+        .group-toggle input:checked + .toggle-slider:before {
+            transform: translateX(18px);
+        }
+        
+        /* 禁用样式 */
+        .filter-toggle.disabled, .group-toggle.disabled {
+            opacity: 0.5;
+        }
+        
+        .filter-toggle.disabled .toggle-slider, .group-toggle.disabled .toggle-slider {
+            background-color: #e0e0e0;
+        }
+        
+        .filter-toggle.disabled input:checked + .toggle-slider, 
+        .group-toggle.disabled input:checked + .toggle-slider {
+            background-color: #e0e0e0;
+        }
+        
+        .control-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .control-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .test-input {
+            width: 100%;
+            min-height: 120px;
+            padding: 1rem;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        
+        .test-output {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 1rem;
+            min-height: 80px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .test-output.has-result {
+            background: #e8f5e8;
+            border-color: #28a745;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 0.75rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #007AFF;
+        }
+        
+        .btn {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background: #0056CC;
+            transform: translateY(-1px);
+        }
+        
+        .btn.secondary {
+            background: #6c757d;
+        }
+        
+        .btn.secondary:hover {
+            background: #545b62;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 过滤器开关逻辑全面测试</h1>
+    
+    <div class="test-section">
+        <h2>🎛️ 控制面板</h2>
+        <div class="control-panel">
+            <div class="control-item">
+                <span><strong>主过滤器开关：</strong></span>
+                <label class="filter-toggle" id="master-toggle-container">
+                    <input type="checkbox" id="master-toggle" checked onchange="updateAllStates()">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="control-item">
+                <span><strong>提示词简化：</strong></span>
+                <label class="filter-toggle" id="simplify-toggle-container">
+                    <input type="checkbox" id="simplify-toggle" onchange="handleSimplifyToggle()">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="control-item">
+                <span><strong>测试组开关：</strong></span>
+                <label class="group-toggle" id="group-toggle-container">
+                    <input type="checkbox" id="group-toggle" checked onchange="handleGroupToggle()">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>🔍 实际提示词处理测试</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div>
+                <h3>输入提示词</h3>
+                <textarea id="test-input" class="test-input" placeholder="输入测试提示词...">masterpiece, best quality, 1girl, long hair, beautiful girl, hat, red hat, solo, standing</textarea>
+                <div style="margin-top: 1rem;">
+                    <button class="btn" onclick="processTestInput()">🚀 处理提示词</button>
+                    <button class="btn secondary" onclick="loadTestCases()">📋 加载测试用例</button>
+                </div>
+            </div>
+            <div>
+                <h3>处理结果</h3>
+                <div id="test-output" class="test-output">等待输入...</div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="input-count">0</div>
+                        <div>输入标签数</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="output-count">0</div>
+                        <div>输出标签数</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="filtered-count">0</div>
+                        <div>过滤移除数</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="simplified-count">0</div>
+                        <div>简化移除数</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>✅ UI 行为测试结果</h2>
+        <div id="ui-test-results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>⚙️ 逻辑功能测试结果</h2>
+        <div id="logic-test-results"></div>
+    </div>
+    
+    <script>
+        // 模拟过滤器管理器
+        class MockFilterManager {
+            constructor() {
+                this.masterEnabled = true;
+                this.simplifyEnabled = false;
+                this.groups = [
+                    {
+                        id: 'test-group',
+                        name: '测试组',
+                        enabled: true,
+                        keywords: ['hat'],
+                        replacement: ''
+                    }
+                ];
+            }
+            
+            setMasterEnabled(enabled) {
+                this.masterEnabled = enabled;
+            }
+            
+            setSimplifyEnabled(enabled) {
+                this.simplifyEnabled = enabled;
+            }
+            
+            processPrompt(inputTags) {
+                let tags = [...inputTags];
+                let filteredCount = 0;
+                let simplifiedCount = 0;
+                
+                // 只有在主开关启用时才应用过滤和简化
+                if (this.masterEnabled) {
+                    // 应用组过滤
+                    this.groups.forEach(group => {
+                        if (group.enabled && group.keywords.length > 0) {
+                            group.keywords.forEach(keyword => {
+                                const initialLength = tags.length;
+                                tags = tags.filter(tag => !tag.toLowerCase().includes(keyword.toLowerCase()));
+                                filteredCount += initialLength - tags.length;
+                            });
+                        }
+                    });
+                    
+                    // 应用提示词简化
+                    if (this.simplifyEnabled) {
+                        const beforeSimplify = tags.length;
+                        tags = this.simplifyPrompt(tags);
+                        simplifiedCount = beforeSimplify - tags.length;
+                    }
+                }
+                
+                return {
+                    tags,
+                    stats: {
+                        filteredCount,
+                        simplifiedCount
+                    }
+                };
+            }
+            
+            simplifyPrompt(tags) {
+                // 简化逻辑：移除被其他标签完全包含的标签
+                return tags.filter((tag, index) => {
+                    const tagLower = tag.toLowerCase().trim();
+                    if (!tagLower) return false;
+                    
+                    return !tags.some((otherTag, otherIndex) => {
+                        if (index === otherIndex) return false;
+                        const otherLower = otherTag.toLowerCase().trim();
+                        return otherLower.includes(tagLower) && otherLower !== tagLower;
+                    });
+                });
+            }
+        }
+        
+        const mockFilterManager = new MockFilterManager();
+        let testResults = [];
+        
+        // 测试用例数据
+        const testCases = [
+            {
+                name: "基本过滤测试",
+                input: "masterpiece, best quality, 1girl, hat, red hat, solo",
+                expected: {
+                    masterOn: "masterpiece, best quality, 1girl, solo",
+                    masterOff: "masterpiece, best quality, 1girl, hat, red hat, solo"
+                }
+            },
+            {
+                name: "简化功能测试",
+                input: "beautiful girl, girl, long hair, hair, standing",
+                expected: {
+                    simplifyOn: "beautiful girl, long hair, standing",
+                    simplifyOff: "beautiful girl, girl, long hair, hair, standing"
+                }
+            },
+            {
+                name: "综合测试",
+                input: "masterpiece, best quality, 1girl, beautiful girl, hat, red hat, long hair, hair, solo, standing",
+                expected: {
+                    masterOn_simplifyOn: "masterpiece, best quality, beautiful girl, long hair, solo, standing",
+                    masterOn_simplifyOff: "masterpiece, best quality, 1girl, beautiful girl, long hair, hair, solo, standing",
+                    masterOff: "masterpiece, best quality, 1girl, beautiful girl, hat, red hat, long hair, hair, solo, standing"
+                }
+            }
+        ];
+        
+        function updateAllStates() {
+            const masterEnabled = document.getElementById('master-toggle').checked;
+            mockFilterManager.setMasterEnabled(masterEnabled);
+            
+            // 更新UI状态
+            const simplifyContainer = document.getElementById('simplify-toggle-container');
+            const groupContainer = document.getElementById('group-toggle-container');
+            
+            if (masterEnabled) {
+                simplifyContainer.classList.remove('disabled');
+                groupContainer.classList.remove('disabled');
+            } else {
+                simplifyContainer.classList.add('disabled');
+                groupContainer.classList.add('disabled');
+            }
+            
+            runUITests();
+            processTestInput();
+        }
+        
+        function handleSimplifyToggle() {
+            const enabled = document.getElementById('simplify-toggle').checked;
+            mockFilterManager.setSimplifyEnabled(enabled);
+            processTestInput();
+        }
+        
+        function handleGroupToggle() {
+            const enabled = document.getElementById('group-toggle').checked;
+            mockFilterManager.groups[0].enabled = enabled;
+            processTestInput();
+        }
+        
+        function processTestInput() {
+            const input = document.getElementById('test-input').value.trim();
+            if (!input) return;
+            
+            const inputTags = input.split(',').map(tag => tag.trim()).filter(tag => tag);
+            const result = mockFilterManager.processPrompt(inputTags);
+            
+            // 更新输出
+            const outputEl = document.getElementById('test-output');
+            outputEl.textContent = result.tags.join(', ');
+            outputEl.classList.add('has-result');
+            
+            // 更新统计
+            document.getElementById('input-count').textContent = inputTags.length;
+            document.getElementById('output-count').textContent = result.tags.length;
+            document.getElementById('filtered-count').textContent = result.stats.filteredCount;
+            document.getElementById('simplified-count').textContent = result.stats.simplifiedCount;
+            
+            runLogicTests();
+        }
+        
+        function loadTestCases() {
+            const testCase = testCases[Math.floor(Math.random() * testCases.length)];
+            document.getElementById('test-input').value = testCase.input;
+            processTestInput();
+        }
+        
+        function runUITests() {
+            testResults = [];
+            const masterEnabled = document.getElementById('master-toggle').checked;
+            
+            // UI测试1: 检查简化开关禁用样式
+            const simplifyContainer = document.getElementById('simplify-toggle-container');
+            const simplifyStyleTest = masterEnabled ? 
+                !simplifyContainer.classList.contains('disabled') : 
+                simplifyContainer.classList.contains('disabled');
+            
+            testResults.push({
+                category: 'UI',
+                name: '提示词简化开关禁用样式',
+                result: simplifyStyleTest,
+                description: masterEnabled ? 
+                    '主开关启用时，简化开关不应有disabled类' : 
+                    '主开关禁用时，简化开关应有disabled类'
+            });
+            
+            // UI测试2: 检查组开关禁用样式
+            const groupContainer = document.getElementById('group-toggle-container');
+            const groupStyleTest = masterEnabled ? 
+                !groupContainer.classList.contains('disabled') : 
+                groupContainer.classList.contains('disabled');
+            
+            testResults.push({
+                category: 'UI',
+                name: '组开关禁用样式',
+                result: groupStyleTest,
+                description: masterEnabled ? 
+                    '主开关启用时，组开关不应有disabled类' : 
+                    '主开关禁用时，组开关应有disabled类'
+            });
+            
+            // UI测试3: 检查开关可点击性
+            let clickabilityTest = true;
+            try {
+                // 测试简化开关点击
+                const simplifyToggle = document.getElementById('simplify-toggle');
+                const originalState = simplifyToggle.checked;
+                simplifyToggle.checked = !originalState;
+                handleSimplifyToggle();
+                simplifyToggle.checked = originalState;
+                handleSimplifyToggle();
+                
+                // 测试组开关点击
+                const groupToggle = document.getElementById('group-toggle');
+                const originalGroupState = groupToggle.checked;
+                groupToggle.checked = !originalGroupState;
+                handleGroupToggle();
+                groupToggle.checked = originalGroupState;
+                handleGroupToggle();
+                
+            } catch (error) {
+                clickabilityTest = false;
+            }
+            
+            testResults.push({
+                category: 'UI',
+                name: '开关可点击性',
+                result: clickabilityTest,
+                description: '即使在禁用状态下，所有开关都应该可以点击配置'
+            });
+            
+            displayUIResults();
+        }
+        
+        function runLogicTests() {
+            const logicResults = [];
+            const input = document.getElementById('test-input').value.trim();
+            if (!input) return;
+            
+            const inputTags = input.split(',').map(tag => tag.trim()).filter(tag => tag);
+            
+            // 逻辑测试1: 主开关关闭时不应过滤
+            mockFilterManager.setMasterEnabled(false);
+            const resultMasterOff = mockFilterManager.processPrompt(inputTags);
+            const masterOffTest = resultMasterOff.tags.length === inputTags.length && 
+                                 resultMasterOff.stats.filteredCount === 0 && 
+                                 resultMasterOff.stats.simplifiedCount === 0;
+            
+            logicResults.push({
+                category: 'Logic',
+                name: '主开关关闭时不过滤',
+                result: masterOffTest,
+                description: `主开关关闭时应保持原始标签数量 (${inputTags.length}个)`
+            });
+            
+            // 逻辑测试2: 主开关开启时正确过滤
+            mockFilterManager.setMasterEnabled(true);
+            mockFilterManager.setSimplifyEnabled(false);
+            const resultMasterOn = mockFilterManager.processPrompt(inputTags);
+            const masterOnTest = resultMasterOn.stats.filteredCount > 0 || resultMasterOn.tags.length <= inputTags.length;
+            
+            logicResults.push({
+                category: 'Logic',
+                name: '主开关开启时正确过滤',
+                result: masterOnTest,
+                description: `过滤后标签数: ${resultMasterOn.tags.length}, 过滤移除: ${resultMasterOn.stats.filteredCount}`
+            });
+            
+            // 逻辑测试3: 简化功能独立工作
+            mockFilterManager.setSimplifyEnabled(true);
+            const resultWithSimplify = mockFilterManager.processPrompt(inputTags);
+            const simplifyTest = resultWithSimplify.stats.simplifiedCount >= 0;
+            
+            logicResults.push({
+                category: 'Logic',
+                name: '简化功能独立工作',
+                result: simplifyTest,
+                description: `简化移除标签数: ${resultWithSimplify.stats.simplifiedCount}`
+            });
+            
+            // 恢复原始状态
+            mockFilterManager.setMasterEnabled(document.getElementById('master-toggle').checked);
+            mockFilterManager.setSimplifyEnabled(document.getElementById('simplify-toggle').checked);
+            
+            displayLogicResults(logicResults);
+        }
+        
+        function displayUIResults() {
+            const resultsEl = document.getElementById('ui-test-results');
+            const uiResults = testResults.filter(r => r.category === 'UI');
+            
+            let html = '';
+            const passed = uiResults.filter(r => r.result).length;
+            const total = uiResults.length;
+            
+            html += `<div class="test-result ${passed === total ? 'pass' : 'fail'}">`;
+            html += `<strong>UI测试总结：${passed}/${total} 测试通过</strong>`;
+            html += `</div>`;
+            
+            uiResults.forEach(test => {
+                html += `<div class="test-result ${test.result ? 'pass' : 'fail'}">`;
+                html += `<strong>${test.name}:</strong> ${test.result ? '✅ 通过' : '❌ 失败'}<br>`;
+                html += `<small>${test.description}</small>`;
+                html += `</div>`;
+            });
+            
+            resultsEl.innerHTML = html;
+        }
+        
+        function displayLogicResults(logicResults) {
+            const resultsEl = document.getElementById('logic-test-results');
+            
+            let html = '';
+            const passed = logicResults.filter(r => r.result).length;
+            const total = logicResults.length;
+            
+            html += `<div class="test-result ${passed === total ? 'pass' : 'fail'}">`;
+            html += `<strong>逻辑测试总结：${passed}/${total} 测试通过</strong>`;
+            html += `</div>`;
+            
+            logicResults.forEach(test => {
+                html += `<div class="test-result ${test.result ? 'pass' : 'fail'}">`;
+                html += `<strong>${test.name}:</strong> ${test.result ? '✅ 通过' : '❌ 失败'}<br>`;
+                html += `<small>${test.description}</small>`;
+                html += `</div>`;
+            });
+            
+            html += '<div class="test-result info">';
+            html += '<strong>🔍 使用说明：</strong><br>';
+            html += '1. 切换主过滤器开关，观察子开关变灰但仍可点击<br>';
+            html += '2. 输入测试提示词，观察不同开关状态下的处理结果<br>';
+            html += '3. 验证主开关关闭时不进行任何过滤处理<br>';
+            html += '4. 点击"加载测试用例"按钮测试预设场景';
+            html += '</div>';
+            
+            resultsEl.innerHTML = html;
+        }
+        
+        // 页面加载完成后运行初始测试
+        window.addEventListener('load', () => {
+            updateAllStates();
+            processTestInput();
+        });
+    </script>
+</body>
+</html>

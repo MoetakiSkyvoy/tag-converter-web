@@ -308,7 +308,6 @@ input:checked + .toggle-slider:before {
 /* 禁用状态样式 */
 .filter-toggle.disabled {
     opacity: 0.5;
-    pointer-events: none;
 }
 
 .filter-toggle.disabled .toggle-slider {
@@ -316,6 +315,19 @@ input:checked + .toggle-slider:before {
 }
 
 .filter-toggle.disabled input:checked + .toggle-slider {
+    background-color: #e0e0e0;
+}
+
+/* 组开关禁用状态样式 */
+.group-toggle.disabled {
+    opacity: 0.5;
+}
+
+.group-toggle.disabled .toggle-slider {
+    background-color: #e0e0e0;
+}
+
+.group-toggle.disabled input:checked + .toggle-slider {
     background-color: #e0e0e0;
 }
 

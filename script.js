@@ -1651,6 +1651,24 @@ class UIManager {
     }
     
     /**
+     * 更新组开关的启用/禁用状态
+     * @param {boolean} mainFilterEnabled - 主过滤器是否启用
+     */
+    updateGroupToggleStates(mainFilterEnabled) {
+        const groupCards = document.querySelectorAll('.group-card');
+        groupCards.forEach(groupCard => {
+            const groupToggle = groupCard.querySelector('.group-toggle');
+            if (groupToggle) {
+                if (mainFilterEnabled) {
+                    groupToggle.classList.remove('disabled');
+                } else {
+                    groupToggle.classList.add('disabled');
+                }
+            }
+        });
+    }
+    
+    /**
      * 初始化过滤器UI
      * @param {FilterManager} filterManager - 过滤器管理器实例
      */
@@ -1670,8 +1688,9 @@ class UIManager {
             this.elements.simplifyEnabled.checked = status.simplifyEnabled;
         }
         
-        // 初始化简化开关的启用状态
+        // 初始化简化开关和组开关的启用状态
         this.updateSimplifyToggleState(status.enabled);
+        this.updateGroupToggleStates(status.enabled);
         
         this.updateFilterStatus(status);
     }
@@ -2108,6 +2127,7 @@ function toggleFilter() {
     
     // 更新UI状态和简化开关的启用状态
     tagConverter.uiManager.updateSimplifyToggleState(enabled);
+    tagConverter.uiManager.updateGroupToggleStates(enabled);
     tagConverter.uiManager.updateFilterStatus(tagConverter.filterManager.getStatus());
     
     // 重新转换当前内容
@@ -2129,13 +2149,6 @@ function toggleFilter() {
  * - 实时更新：确保切换后立即看到效果
  */
 function toggleSimplify() {
-    // 检查主过滤器是否启用，如果未启用则不允许切换
-    if (!tagConverter.filterManager.masterEnabled) {
-        // 强制保持关闭状态
-        document.getElementById('simplify-enabled').checked = false;
-        return;
-    }
-    
     const enabled = document.getElementById('simplify-enabled').checked;
     tagConverter.filterManager.setSimplifyEnabled(enabled);
     
@@ -2355,6 +2368,16 @@ function createGroupElement(group) {
     if (replacementInput) {
         replacementInput.value = group.replacement;
         validateReplacementInput(replacementInput);
+    }
+    
+    // 设置组开关的禁用状态（基于主过滤器状态）
+    const groupToggle = groupElement.querySelector('.group-toggle');
+    if (groupToggle) {
+        if (tagConverter.filterManager.masterEnabled) {
+            groupToggle.classList.remove('disabled');
+        } else {
+            groupToggle.classList.add('disabled');
+        }
     }
     
     return groupElement;
