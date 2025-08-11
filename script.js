@@ -1715,11 +1715,31 @@ class UIManager {
             this.elements.simplifyEnabled.checked = status.simplifyEnabled;
         }
         
+        // 初始化展开/收起按钮状态
+        this.initializeExpandButtonState();
+        
         // 初始化简化开关和组开关的启用状态
         this.updateSimplifyToggleState(status.enabled);
         this.updateGroupToggleStates(status.enabled);
         
         this.updateFilterStatus(status);
+    }
+    
+    /**
+     * 初始化展开/收起按钮的状态
+     */
+    initializeExpandButtonState() {
+        const content = document.getElementById('filter-content');
+        const button = document.getElementById('filter-expand');
+        
+        if (content && button) {
+            // 根据当前内容显示状态设置按钮文本
+            if (content.style.display === 'none' || content.style.display === '') {
+                button.textContent = '▼ 展开设置';
+            } else {
+                button.textContent = '▲ 收起设置';
+            }
+        }
     }
 }
 
