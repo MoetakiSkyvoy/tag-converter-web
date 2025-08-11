@@ -419,23 +419,6 @@ class GroupedFilterManager {
         this.saveSettings();
     }
     
-    /**
-     * 清零组的命中计数
-     * @param {string} groupId - 组ID，不传则清零所有组
-     */
-    clearMatchCounts(groupId = null) {
-        if (groupId) {
-            const group = this.getGroup(groupId);
-            if (group) {
-                group.meta.currentMatchCount = 0;
-            }
-        } else {
-            this.groups.forEach(group => {
-                group.meta.currentMatchCount = 0;
-            });
-        }
-        this.saveSettings();
-    }
     
     // ====================================================================
     // 核心过滤算法
@@ -2668,31 +2651,6 @@ function duplicateGroup(menuItem) {
     }
 }
 
-/**
- * 清零组命中计数
- * @param {HTMLElement} menuItem - 菜单项元素
- */
-function clearGroupMatchCount(menuItem) {
-    const groupElement = menuItem.closest('.group-card');
-    const groupId = groupElement?.getAttribute('data-group-id');
-    
-    if (groupId) {
-        tagConverter.filterManager.clearMatchCounts(groupId);
-        
-        // 更新徽标显示
-        const matchBadge = groupElement.querySelector('.group-match-badge');
-        if (matchBadge) {
-            matchBadge.textContent = tagConverter.filterManager.masterEnabled ? '•0' : '—';
-            matchBadge.classList.remove('has-matches');
-        }
-    }
-    
-    // 关闭菜单
-    const dropdown = menuItem.closest('.menu-dropdown');
-    if (dropdown) {
-        dropdown.style.display = 'none';
-    }
-}
 
 /**
  * 删除组
