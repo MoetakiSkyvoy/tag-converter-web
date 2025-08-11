@@ -424,7 +424,7 @@ input:checked + .toggle-slider:before {
     border: 1px solid #e9ecef;
     border-radius: 10px;
     margin-bottom: 0.75rem;
-    overflow: hidden;
+    overflow: visible;
     transition: all 0.2s ease;
 }
 
@@ -601,7 +601,7 @@ input:checked + .toggle-slider:before {
     border: 1px solid #e9ecef;
     border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    z-index: 1000;
+    z-index: 9999;
     min-width: 140px;
 }
 
