@@ -431,6 +431,7 @@ input:checked + .toggle-slider:before {
 .group-card:hover {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     border-color: #007AFF;
+    border-radius: 10px;
 }
 
 .group-card.dragging {
@@ -447,6 +448,13 @@ input:checked + .toggle-slider:before {
     background: #fff;
     gap: 0.75rem;
     cursor: default;
+    border-radius: 10px;
+}
+
+/* 当组展开时，头部只要顶部圆角 */
+.group-card .group-content[style*="block"] ~ .group-header,
+.group-card:has(.group-content[style*="block"]) .group-header {
+    border-radius: 10px 10px 0 0;
 }
 
 .drag-handle {
@@ -637,6 +645,7 @@ input:checked + .toggle-slider:before {
     border-top: 1px solid #e9ecef;
     box-sizing: border-box;
     width: 100%;
+    border-radius: 0 0 10px 10px;
 }
 
 .group-section {
