@@ -515,21 +515,21 @@ ${index + 1}. ${result.testName}
                         name: '测试组1',
                         enabled: true,
                         keywords: ['censored'],
-                        meta: { lastMatchCount: 0 }
+                        meta: { currentMatchCount: 0 }
                     },
                     {
                         id: 'test-group-2',
                         name: '测试组2',
                         enabled: true,
                         keywords: ['girl'],
-                        meta: { lastMatchCount: 0 }
+                        meta: { currentMatchCount: 0 }
                     },
                     {
                         id: 'test-group-3',
                         name: '测试组3',
                         enabled: false,
                         keywords: ['test'],
-                        meta: { lastMatchCount: 0 }
+                        meta: { currentMatchCount: 0 }
                     }
                 ];
                 this.masterEnabled = true;
@@ -539,7 +539,7 @@ ${index + 1}. ${result.testName}
                 // 模拟过滤逻辑
                 this.groups.forEach(group => {
                     if (!group.enabled) {
-                        group.meta.lastMatchCount = 0;
+                        group.meta.currentMatchCount = 0;
                         return;
                     }
 
@@ -551,7 +551,7 @@ ${index + 1}. ${result.testName}
                             }
                         }
                     }
-                    group.meta.lastMatchCount = matchCount;
+                    group.meta.currentMatchCount = matchCount;
                 });
 
                 return tags;
@@ -562,7 +562,7 @@ ${index + 1}. ${result.testName}
                     enabled: this.masterEnabled,
                     groups: this.groups,
                     keywordCount: this.groups.length,
-                    lastFilteredCount: this.groups.reduce((sum, g) => sum + g.meta.lastMatchCount, 0),
+                    lastFilteredCount: this.groups.reduce((sum, g) => sum + g.meta.currentMatchCount, 0),
                     lastSimplifiedCount: 0
                 };
             }
@@ -578,7 +578,7 @@ ${index + 1}. ${result.testName}
                     const matchBadge = groupElement.querySelector('.group-match-badge');
                     if (!matchBadge) return;
                     
-                    const count = group.meta?.lastMatchCount ?? 0;
+                    const count = group.meta?.currentMatchCount ?? 0;
                     if (masterEnabled && count > 0) {
                         matchBadge.textContent = `•${count}`;
                         matchBadge.classList.add('has-matches');

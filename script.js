@@ -97,7 +97,7 @@ function generateUUID() {
  * @property {string[]} keywords - 关键词原始文本数组
  * @property {string} replacement - 替换短语的原始输入
  * @property {Object} meta - 元数据
- * @property {number} meta.lastMatchCount - 上次命中数
+ * @property {number} meta.currentMatchCount - 当前命中数
  */
 
 /**
@@ -123,7 +123,7 @@ function createDefaultGroup(name = '') {
         keywords: [],
         replacement: '',
         meta: {
-            lastMatchCount: 0
+            currentMatchCount: 0
         }
     };
 }
@@ -206,7 +206,7 @@ class GroupedFilterManager {
             keywords: group.keywords || [],
             replacement: group.replacement || '',
             meta: {
-                lastMatchCount: group.meta?.lastMatchCount ?? 0,
+                currentMatchCount: group.meta?.currentMatchCount ?? 0,
                 ...group.meta
             }
         }));
@@ -288,8 +288,8 @@ class GroupedFilterManager {
             simplifyEnabled: this.simplifyEnabled,
             keywordCount: totalGroups, // 显示组数而不是关键词数
             enabledGroupCount: enabledGroups,
-            lastFilteredCount: this.lastTotalFilteredCount,
-            lastSimplifiedCount: this.lastSimplifiedCount,
+            currentFilteredCount: this.lastTotalFilteredCount,
+            currentSimplifiedCount: this.lastSimplifiedCount,
             groups: this.groups
         };
     }
@@ -343,7 +343,7 @@ class GroupedFilterManager {
             id: generateUUID(),
             name: `${sourceGroup.name}(副本)`,
             meta: {
-                lastMatchCount: 0
+                currentMatchCount: 0
             }
         };
         
@@ -427,11 +427,11 @@ class GroupedFilterManager {
         if (groupId) {
             const group = this.getGroup(groupId);
             if (group) {
-                group.meta.lastMatchCount = 0;
+                group.meta.currentMatchCount = 0;
             }
         } else {
             this.groups.forEach(group => {
-                group.meta.lastMatchCount = 0;
+                group.meta.currentMatchCount = 0;
             });
         }
         this.saveSettings();
@@ -457,13 +457,13 @@ class GroupedFilterManager {
         // 第一阶段：分组过滤
         for (const group of this.groups) {
             if (!group.enabled || group.keywords.length === 0) {
-                group.meta.lastMatchCount = 0;
+                group.meta.currentMatchCount = 0;
                 continue;
             }
             
             const result = this._applyGroupFilter(currentTags, group);
             currentTags = result.filteredTags;
-            group.meta.lastMatchCount = result.matchCount;
+            group.meta.currentMatchCount = result.matchCount;
             totalFilteredCount += result.matchCount;
         }
         
@@ -738,7 +738,7 @@ class GroupedFilterManager {
                     ...group,
                     id: generateUUID(), // 重新生成ID避免冲突
                     meta: {
-                        lastMatchCount: 0
+                        currentMatchCount: 0
                     }
                 }));
                 
@@ -755,7 +755,7 @@ class GroupedFilterManager {
                 this.groups = importConfig.groups.map(group => ({
                     ...group,
                     meta: {
-                        lastMatchCount: 0,
+                        currentMatchCount: 0,
                         ...group.meta
                     }
                 }));
@@ -792,7 +792,7 @@ class GroupedFilterManager {
             keywords: group.keywords || [],
             replacement: group.replacement || '',
             meta: {
-                lastMatchCount: 0,
+                currentMatchCount: 0,
                 ...group.meta
             }
         }));
@@ -1629,10 +1629,10 @@ class UIManager {
             this.elements.filterCount.textContent = status.keywordCount;
         }
         if (this.elements.filteredCount) {
-            this.elements.filteredCount.textContent = status.lastFilteredCount;
+            this.elements.filteredCount.textContent = status.currentFilteredCount;
         }
         if (this.elements.simplifiedCount) {
-            this.elements.simplifiedCount.textContent = status.lastSimplifiedCount;
+            this.elements.simplifiedCount.textContent = status.currentSimplifiedCount;
         }
         
         // 更新各组的匹配徽章显示
@@ -1652,7 +1652,7 @@ class UIManager {
             const matchBadge = groupElement.querySelector('.group-match-badge');
             if (!matchBadge) return;
             
-            const count = group.meta?.lastMatchCount ?? 0;
+            const count = group.meta?.currentMatchCount ?? 0;
             if (masterEnabled && count > 0) {
                 matchBadge.textContent = `•${count}`;
                 matchBadge.classList.add('has-matches');
@@ -1772,7 +1772,17 @@ function convert() {
         if (statusEl) {
             statusEl.style.display = 'none';
         }
+        
+        // 重置所有组的命中计数和总体统计
+        tagConverter.filterManager.groups.forEach(group => {
+            group.meta.currentMatchCount = 0;
+        });
+        tagConverter.filterManager.lastTotalFilteredCount = 0;
+        tagConverter.filterManager.lastSimplifiedCount = 0;
+        
+        // 更新UI显示
         tagConverter.uiManager.updateOutput([]);
+        tagConverter.uiManager.updateFilterStatus(tagConverter.filterManager.getStatus());
         return;
     }
     
@@ -2384,7 +2394,7 @@ function createGroupElement(group) {
     // 设置命中徽标
     const matchBadge = groupElement.querySelector('.group-match-badge');
     if (matchBadge) {
-        const count = group.meta?.lastMatchCount ?? 0;
+        const count = group.meta?.currentMatchCount ?? 0;
         if (tagConverter.filterManager.masterEnabled && count > 0) {
             matchBadge.textContent = `•${count}`;
             matchBadge.classList.add('has-matches');
@@ -2465,12 +2475,12 @@ function updateFilterStats() {
     
     const filteredCount = document.getElementById('filtered-count');
     if (filteredCount) {
-        filteredCount.textContent = status.lastFilteredCount;
+        filteredCount.textContent = status.currentFilteredCount;
     }
     
     const simplifiedCount = document.getElementById('simplified-count');
     if (simplifiedCount) {
-        simplifiedCount.textContent = status.lastSimplifiedCount;
+        simplifiedCount.textContent = status.currentSimplifiedCount;
     }
 }
 
